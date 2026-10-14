@@ -37,6 +37,7 @@ mod tests {
         for d in &c {
             assert!(d.iso_url.starts_with("https://"), "{}", d.id);
             assert!(d.checksum_url.starts_with("https://"), "{}", d.id);
+            if let Some(h) = &d.sha256 { assert!(h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()), "{}", d.id); }
         }
     }
 }

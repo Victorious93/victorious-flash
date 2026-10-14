@@ -78,6 +78,12 @@ mod tests {
         assert!(find_sha256(&bsd, "missing.iso").is_none());
     }
     #[test]
+    fn parses_pgp_signed_fedora_checksum() {
+        let f = "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA256\n\n# Fedora-Workstation-Live-42-1.1.x86_64.iso: 2398523392 bytes\nSHA256 (Fedora-Workstation-Live-42-1.1.x86_64.iso) = 98958d80e8a80eabe61275337f969c8e2212adc3a223d9bbdab9411bb1c95cba\n-----BEGIN PGP SIGNATURE-----\n\niQIzBAEBCAAdFiEEsPSVBFj2nhFQxsXtyKxJFhBe+UQF\n-----END PGP SIGNATURE-----\n";
+        assert_eq!(find_sha256(f, "Fedora-Workstation-Live-42-1.1.x86_64.iso").as_deref(),
+            Some("98958d80e8a80eabe61275337f969c8e2212adc3a223d9bbdab9411bb1c95cba"));
+    }
+    #[test]
     fn verify_detects_mismatch() {
         let f = format!("{ABC}  a.iso\n");
         assert!(verify(ABC, &f, "a.iso").is_ok());
