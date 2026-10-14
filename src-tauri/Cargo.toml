@@ -1,0 +1,23 @@
+[package]
+name = "victorious-flash"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Victorious Flash - download, verify and flash Linux ISOs"
+
+[lib]
+name = "victorious_flash_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+flash-core = { path = "../crates/flash-core" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["fs", "io-util", "process"] }
+dirs = "5"

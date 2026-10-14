@@ -1,0 +1,15 @@
+:root { --bg:#0e0e1a; --panel:#17172a; --gold:#ffbe00; --text:#ececf4; --muted:#9a9ab0; --red:#ff4d5e; font-family: Inter, system-ui, sans-serif; color: var(--text); background: var(--bg); }
+body { margin:0; } .app { max-width: 1000px; margin: 0 auto; padding: 16px; }
+header { display:flex; align-items:center; gap:12px; } .logo { background:var(--gold); color:#000; font-weight:900; border-radius:10px; width:40px; height:40px; display:grid; place-items:center; font-size:24px; }
+h1 em { color: var(--gold); font-style: normal; }
+nav { display:flex; gap:8px; margin: 12px 0; } button { background:var(--panel); color:var(--text); border:1px solid #2c2c48; border-radius:8px; padding:8px 14px; cursor:pointer; }
+button.active, .sel { border-color: var(--gold) !important; } button.primary { background: var(--gold); color:#000; font-weight:700; } button:disabled { opacity:.4; cursor:not-allowed; }
+.grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:12px; margin-bottom: 16px; }
+.card { text-align:left; display:flex; flex-direction:column; gap:4px; } .card small, .card p { color: var(--muted); margin:0; }
+.device { display:block; background:var(--panel); padding:10px; border-radius:8px; border:1px solid #2c2c48; margin:6px 0; }
+.danger { border:1px solid var(--red); border-radius:8px; padding:12px; margin-top:12px; } .danger-btn { background: var(--red) !important; color:#fff !important; }
+.error { color: var(--red); } .row { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-top: 12px; }
+input { background:#0b0b14; color:var(--text); border:1px solid #2c2c48; border-radius:6px; padding:8px; margin-right:8px; }
+.progress { position:relative; height:22px; background:var(--panel); border-radius:6px; overflow:hidden; } .progress div { background:var(--gold); height:100%; } .progress span { position:absolute; inset:0; text-align:center; font-size:12px; line-height:22px; mix-blend-mode: difference; }
+.guide { display:grid; grid-template-columns: 220px 1fr; gap:16px; } .guide aside { display:flex; flex-direction:column; gap:6px; } .guide aside button { text-align:left; }
+table { border-collapse: collapse; width:100%; } td, th { border-bottom:1px solid #2c2c48; padding:6px; text-align:left; }

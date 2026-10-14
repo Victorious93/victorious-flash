@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["crates/flash-core", "crates/flash-helper", "src-tauri"]

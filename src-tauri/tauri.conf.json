@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Victorious Flash",
+  "version": "0.1.0",
+  "identifier": "com.victorious.flash",
+  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://localhost:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
+  "app": { "windows": [{ "label": "main", "title": "Victorious Flash", "width": 1000, "height": 720 }], "security": { "csp": null } },
+  "bundle": {
+    "active": true,
+    "targets": ["appimage", "deb"],
+    "category": "Utility",
+    "shortDescription": "Download, verify and flash Linux to USB",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.png"],
+    "linux": {
+      "deb": {
+        "depends": ["policykit-1 | pkexec", "util-linux"],
+        "files": {
+          "/usr/lib/victorious-flash/victorious-flash-helper": "../target/release/victorious-flash-helper",
+          "/usr/share/polkit-1/actions/com.victorious.flash.policy": "../packaging/com.victorious.flash.policy"
+        }
+      }
+    }
+  }
+}
