@@ -4,6 +4,9 @@
 
 Victorious Flash is a Linux desktop app (Tauri v2 · Rust · React + TypeScript + Vite) that takes you from "I want to try Linux" to a bootable, verified USB stick and a step-by-step install guide.
 
+## Branding
+Victorious navy (`#0B1530` base, `#13214A` panels) with an electric-green accent (`#39FF14`, gradient to `#00FF85`) for buttons, highlights, progress bars and the **V** icon. Red (`#FF4D5E`) is reserved strictly for danger: erase/flash warnings and errors.
+
 ## Features (MVP)
 1. **Distro picker** — curated catalog (`catalog/distros.json`): Ubuntu, Fedora, Linux Mint, Debian, Pop!_OS, openSUSE Tumbleweed, Arch Linux, with official ISO and checksum URLs. Downloads with live progress and verifies **SHA-256** against the vendor's checksum file (GNU and BSD formats) or a pinned hash.
 2. **Safe USB flasher** — lists only removable/hotplug whole disks from `lsblk` (excludes NVMe/SATA internals, loop/zram/optical, read-only, >2 TiB, and anything hosting `/`, `/boot`, `/home`, swap…). You must **type the device name** to confirm. Writing happens in a tiny privileged helper launched with **pkexec**, which re-validates the target itself, writes, `fsync`s and **reads back to verify** the SHA-256.
