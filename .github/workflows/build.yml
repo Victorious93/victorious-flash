@@ -18,9 +18,9 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - name: Rust tests (device filtering, checksums, catalog)
-        run: cargo test -p flash-core
+        run: cargo test -p flash-core -p victorious-flash-bridge
       - name: Build privileged helper
-        run: cargo build --release -p victorious-flash-helper
+        run: cargo build --release -p victorious-flash-helper -p victorious-flash-bridge
       - name: Build AppImage + .deb
         run: npx tauri build --bundles appimage,deb
       - uses: actions/upload-artifact@v4

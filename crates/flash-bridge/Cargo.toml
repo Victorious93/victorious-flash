@@ -1,0 +1,20 @@
+[package]
+name = "victorious-flash-bridge"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Headless DroidCommand AI fleet bridge for Victorious Flash (newline-delimited JSON over stdin/stdout)"
+
+[lib]
+name = "flash_bridge"
+path = "src/lib.rs"
+
+[[bin]]
+name = "victorious-flash-bridge"
+path = "src/main.rs"
+
+[dependencies]
+flash-core = { path = "../flash-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"

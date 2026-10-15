@@ -1,4 +1,4 @@
-<p align="center"><img src="src-tauri/icons/128x128.png" width="96" alt="Victorious Flash logo"></p>
+<p align="center"><img src="docs/logo.png" width="160" alt="Victorious Flash logo"></p>
 <h1 align="center">⚡ Victorious Flash</h1>
 <p align="center"><strong>Pick a Linux. Verify it. Flash it. Install it — victoriously.</strong></p>
 
@@ -16,6 +16,7 @@ Victorious navy (`#0B1530` base, `#13214A` panels) with an electric-green accent
 ```
 crates/flash-core     pure Rust: catalog, checksum parsing/verify, lsblk device filter (unit-tested)
 crates/flash-helper   victorious-flash-helper — root helper run via pkexec (write + read-back verify)
+crates/flash-bridge   victorious-flash-bridge — headless DroidCommand AI fleet bridge (JSON lines over SSH)
 src-tauri             Tauri v2 app: commands list_distros, list_devices, download_iso, flash
 src                   React UI: screens/DistroPicker, Flasher, Guide
 packaging             polkit policy for the helper
@@ -46,3 +47,31 @@ The `.deb` installs the helper at `/usr/lib/victorious-flash/victorious-flash-he
 
 ## License
 MIT © 2026 Don Victor / Victorious
+
+## Fleet bridge (DroidCommand AI)
+`crates/flash-bridge` builds `victorious-flash-bridge`, a headless node that DroidCommand AI's `core-flash` module drives over SSH with a **pinned host key**. It uses the same newline-delimited JSON contract (protocol major **1**) as the RootForge bridge:
+
+```
+request : {"protocol_major":1,"request_id":"…","target_node_id":"vf-<32hex>","operation":"flash.devices.list","timeout_ms":10000,"parameters":{}}
+response: {"protocol_major":1,"request_id":"…","node_id":"vf-<32hex>","ok":true,"result":{…}}   | "ok":false,"error":{"category","message"}
+progress: {"protocol_major":1,"request_id":"…","node_id":"…","ok":true,"progress":{"phase":"write","done":N,"total":M}}   (never final)
+```
+
+| Operation | Parameters | Notes |
+|---|---|---|
+| `flash.capabilities.get` | – | version, node id, operation list |
+| `flash.catalog.list` | – | embedded catalog, or the last verified update |
+| `flash.catalog.update` | `url` (https), `sha256` | pinned hash required; validated before it is stored |
+| `flash.devices.list` | – | same lsblk safety filter as the GUI |
+| `flash.verify` | `image`, `sha256` | hashes an image file on the node |
+| `flash.readback.verify` | `device`, `sha256`, `length` | via `pkexec victorious-flash-helper verify`; streams progress |
+| `flash.image.write` | `image`, `device`, `sha256`, **`confirm`**, optional `catalog_id` | `confirm` must equal the device name (e.g. `sdb`) or path. The image hash is checked first, and the write goes **only** through the pkexec helper, which re-validates and reads back. Streams progress |
+
+Error categories: `malformed_request`, `protocol_mismatch`, `node_mismatch`, `unsupported_operation`, `invalid_parameters`, `safety_refused`, `verify_failed`, `internal`.
+
+Node setup: `victorious-flash-bridge node-id` prints the node id, creating it under `$XDG_STATE_HOME/victorious-flash-bridge/` on first run. Then add the controller's key to `~/.ssh/authorized_keys` with a forced command:
+`command="/usr/bin/victorious-flash-bridge serve",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA…`
+SSH sessions have no polkit agent, so remote writes need a polkit rule that authorises `com.victorious.flash` for that user. That rule is deliberately not shipped by default.
+
+### Catalog: RootForge OS and Android images
+Catalog entries accept these optional fields: `kind` (`linux-iso` default, `rootforge-os`, `android-image`), `flash_method` (`usb-dd` default, `fastboot`, `recovery-sideload`), `image_format` (`iso` default, `img`, `zip`, `img-xz`), `device_codenames` and `notes`. The app and bridge only write `usb-dd` entries in `iso` or `img` format. Fastboot and sideload entries are listed for reference, and `flash.image.write` refuses them.

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-export interface Distro { id: string; name: string; version: string; description: string; iso_url: string; checksum_url: string; iso_filename: string; signature_url: string | null; homepage: string; sha256: string | null; }
+export interface Distro { id: string; name: string; version: string; description: string; iso_url: string; checksum_url: string; iso_filename: string; signature_url: string | null; homepage: string; sha256: string | null; kind?: "linux-iso" | "rootforge-os" | "android-image"; flash_method?: "usb-dd" | "fastboot" | "recovery-sideload"; image_format?: "iso" | "img" | "zip" | "img-xz"; device_codenames?: string[]; notes?: string | null; }
 export interface UsbDevice { name: string; path: string; size: number; model: string; transport: string; mounted: string[]; }
 export interface DownloadResult { path: string; sha256: string; verified: boolean; gpg: string; }
 export interface Progress { phase: string; done: number; total: number; }

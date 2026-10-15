@@ -3985,6 +3985,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "victorious-flash-bridge"
+version = "0.1.0"
+dependencies = [
+ "flash-core",
+ "hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "victorious-flash-helper"
 version = "0.1.0"
 dependencies = [
