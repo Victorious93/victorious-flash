@@ -10,7 +10,7 @@ Victorious navy (`#0B1530` base, `#13214A` panels) with an electric-green accent
 ## Three modes
 1. **Direct install** (no stick): download and verify the ISO, then boot it from this computer's own disk with a GRUB loopback entry that the app generates. You paste it into `/etc/grub.d/40_custom` and run `update-grub`; the app never edits boot config itself. Currently Ubuntu and Linux Mint only (the casper loopback recipe).
 2. **USB**: the safe flasher. It lists only removable/hotplug whole disks from `lsblk` and excludes NVMe/SATA internals, loop/zram/optical, read-only, anything over 2 TiB, and anything hosting `/`, `/boot`, `/home`, swap and so on. You must **type the device name** to confirm. The write happens in a tiny privileged helper launched with **pkexec**, which re-validates the target itself, writes, `fsync`s and **reads back to verify** the SHA-256.
-3. **SD card**: the same writer and the same safeguards, filtered to SD cards (`mmcblkN` readers, or USB card readers). eMMC internal storage (any `mmcblkN` with `boot0`/`rpmb` siblings) is never offered.
+3. **SD card**: the same writer and the same safeguards, filtered to SD cards. The catalog includes **Raspberry Pi OS** (Lite 64-bit, Desktop 64-bit, Lite 32-bit, pinned to the 2026-10-06 trixie release). It is shipped as `.img.xz`, and the helper decompresses it while writing (`mmcblkN` readers, or USB card readers). eMMC internal storage (any `mmcblkN` with `boot0`/`rpmb` siblings) is never offered.
 
 Common to all modes: a curated catalog (`catalog/distros.json`) with official image and checksum URLs. Every download is verified with **SHA-256** against the vendor's checksum file (GNU and BSD formats) or a pinned hash. The **install guide** covers backups, dual-boot vs wipe, boot-menu/BIOS keys by vendor, UEFI vs legacy, Secure Boot & MOK, and partitioning basics.
 
@@ -76,4 +76,12 @@ Node setup: `victorious-flash-bridge node-id` prints the node id, creating it un
 SSH sessions have no polkit agent, so remote writes need a polkit rule that authorises `com.victorious.flash` for that user. That rule is deliberately not shipped by default.
 
 ### Catalog: RootForge OS images
-Entries accept optional `kind` (`linux-iso` by default, or `rootforge-os`), `image_format` (`iso` by default, or a raw `img`) and `notes`. Any entry can be written in USB or SD mode. Direct install is offered only for ISOs with a known loopback recipe. No RootForge OS entry ships yet, because `Victorious93/rootforge-os` has no published release with an image and checksum. Its `release.yml` is meant to produce one: it attaches the ISO with SHA-256 sums to a draft release, which a maintainer then publishes.
+Entries accept an optional `kind` (`linux-iso` by default, `rootforge-os`, or `raspberry-pi-os`), an optional `image_format` (`iso` by default, a raw `img`, or `img-xz`) and optional `notes`.
+
+**`.img.xz` writes** (`flash_core::image::write_verified`, used by the pkexec helper on a single open file):
+1. The SHA-256 of the *compressed* file, which is what vendors publish, is checked before any byte is written.
+2. The size check uses the decompressed size from the xz index, not the download size. An image that expands past the card is refused.
+3. The image is stream-decompressed (`xz2`, statically linked liblzma) while it is written, and the *decompressed* stream is hashed as it goes.
+4. The device read-back must match that decompressed hash.
+
+The bridge applies the same rules for `flash.image.write`. Its result reports `image_sha256` (compressed) and `written_sha256` (decompressed). Use those two for `flash.readback.verify` later. Any entry can be written in USB or SD mode. Direct install is offered only for ISOs with a known loopback recipe. No RootForge OS entry ships yet, because `Victorious93/rootforge-os` has no published release with an image and checksum. Its `release.yml` is meant to produce one: it attaches the ISO with SHA-256 sums to a draft release, which a maintainer then publishes.

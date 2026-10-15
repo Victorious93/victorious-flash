@@ -1,11 +1,12 @@
-//! Privileged helper, run via `pkexec victorious-flash-helper write <iso> <device> <expected-sha256>`.
+//! Privileged helper, run via `pkexec victorious-flash-helper write <image> <device> <sha256-of-image-file>`.
+//! `<image>` may be .iso/.img or .img.xz (detected by magic bytes, decompressed while writing).
 //! Re-validates the target against lsblk (never trusts the GUI), writes the image with
 //! O_SYNC-style flushing, then reads back and compares SHA-256.
 //! Also: `victorious-flash-helper verify <device> <expected-sha256> <length>` — read-back only.
 //! Progress is printed to stdout as `PROGRESS <phase> <done> <total>` lines.
-use flash_core::{checksum, devices};
+use flash_core::{checksum, devices, image};
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::process::{exit, Command};
 
 fn die(msg: &str) -> ! { eprintln!("ERROR {msg}"); exit(1) }
@@ -25,28 +26,23 @@ fn main() {
         for m in &target.mounted { let _ = Command::new("umount").arg(m).status(); }
     }
 
-    let mut src = File::open(iso).unwrap_or_else(|e| die(&format!("open iso: {e}")));
-    let total = src.metadata().map(|m| m.len()).unwrap_or(0);
-    if total > target.size { die("image larger than device") }
+    // One open file for hash, size check and write. For .img.xz the file's SHA-256 (what the
+    // vendor publishes) is checked before anything is written, the size check uses the xz index's
+    // decompressed size, and the bytes are decompressed as they are written.
+    let mut src = File::open(iso).unwrap_or_else(|e| die(&format!("open image: {e}")));
+    if !src.metadata().map(|m| m.is_file()).unwrap_or(false) { die("image is not a regular file") }
     let mut dst = OpenOptions::new().write(true).open(dev).unwrap_or_else(|e| die(&format!("open device: {e}")));
-
-    let mut buf = vec![0u8; 4 << 20];
-    let mut done = 0u64;
-    loop {
-        let n = src.read(&mut buf).unwrap_or_else(|e| die(&format!("read: {e}")));
-        if n == 0 { break }
-        dst.write_all(&buf[..n]).unwrap_or_else(|e| die(&format!("write: {e}")));
-        done += n as u64;
-        println!("PROGRESS write {done} {total}");
-    }
+    let written = image::write_verified(&mut src, &mut dst, &expected, target.size, |ph, d, t| println!("PROGRESS {ph} {d} {t}"))
+        .unwrap_or_else(|e| die(&e.to_string()));
     dst.sync_all().unwrap_or_else(|e| die(&format!("sync: {e}")));
     drop(dst);
 
+    let total = written.bytes;
     let mut rd = File::open(dev).unwrap_or_else(|e| die(&format!("reopen: {e}")));
     rd.seek(SeekFrom::Start(0)).ok();
     let got = checksum::sha256_reader(rd.take(total), |d| println!("PROGRESS verify {d} {total}"))
         .unwrap_or_else(|e| die(&format!("readback: {e}")));
-    if got != expected { die(&format!("verify mismatch: expected {expected} got {got}")) }
+    if got != written.sha256 { die(&format!("verify mismatch: expected {} got {got}", written.sha256)) }
     println!("DONE {got}");
 }
 

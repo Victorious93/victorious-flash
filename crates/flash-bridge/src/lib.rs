@@ -76,8 +76,9 @@ pub trait System {
     fn lsblk_json(&self) -> Result<String, String>;
     fn fetch_https(&self, url: &str) -> Result<Vec<u8>, String>;
     fn sha256_file(&self, path: &str) -> Result<String, String>;
-    /// Size of a regular file; Err if missing or not a regular file.
-    fn regular_file_len(&self, path: &str) -> Result<u64, String>;
+    /// Bytes the image will occupy on the device: file size for .iso/.img, the xz-index
+    /// decompressed size for .img.xz. Err if missing, not a regular file, or a corrupt xz.
+    fn image_write_size(&self, path: &str) -> Result<u64, String>;
     /// Runs `pkexec <helper> <args...>`, feeding each stdout line to `on_line`. Err(stderr) on non-zero exit.
     fn run_helper(&self, args: &[String], on_line: &mut dyn FnMut(&str)) -> Result<(), String>;
     fn load_catalog_override(&self) -> Option<String>;
@@ -223,15 +224,16 @@ impl<S: System> Bridge<S> {
         }
         let dev = self.eligible(device)?;
         if !devices::confirmation_matches(&dev, confirm) { return Err(refused("confirmation does not match the device name")) }
-        let len = self.sys.regular_file_len(&image).map_err(invalid)?;
+        // For .img.xz this is the DECOMPRESSED size, so a 600 MB download that expands past the
+        // card is refused here (and again by the helper).
+        let len = self.sys.image_write_size(&image).map_err(invalid)?;
         if len == 0 { return Err(refused("image is empty")) }
-        if len > dev.size { return Err(refused("image larger than device")) }
-        progress(Progress { phase: "hash".into(), done: 0, total: len });
+        if len > dev.size { return Err(refused(format!("image expands to {len} bytes, larger than the {} byte device", dev.size))) }
+        // `sha256` is the hash of the file as stored (compressed for .img.xz), as vendors publish it.
         let got = self.sys.sha256_file(&image).map_err(invalid)?;
         if !got.eq_ignore_ascii_case(&want) { return Err((category::VERIFY_FAILED, format!("image sha256 mismatch: expected {want}, got {got}"))) }
-        progress(Progress { phase: "hash".into(), done: len, total: len });
         let readback = self.helper(&["write".into(), image.clone(), dev.path.clone(), want.clone()], progress)?;
-        Ok(json!({ "device": dev.path, "image": image, "bytes": len, "sha256": readback, "verified": true }))
+        Ok(json!({ "device": dev.path, "image": image, "image_sha256": want, "bytes": len, "written_sha256": readback, "sha256": readback, "verified": true }))
     }
 
     /// Run the pkexec helper, translating `PROGRESS` lines; returns the `DONE` hash.

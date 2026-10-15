@@ -9,13 +9,13 @@ const LSBLK: &str = r#"{"blockdevices":[
   {"name":"sdb","path":"/dev/sdb","type":"disk","rm":true,"hotplug":true,"ro":false,"size":31406948352,"model":"Ultra","tran":"usb"}]}"#;
 
 #[derive(Default)]
-struct Fake { helper_calls: RefCell<Vec<Vec<String>>>, helper_lines: Vec<&'static str>, helper_err: Option<&'static str>,
+struct Fake { helper_calls: RefCell<Vec<Vec<String>>>, helper_lines: Vec<&'static str>, helper_err: Option<&'static str>, write_size: Option<u64>,
     fetched: Vec<u8>, stored: RefCell<Option<String>> }
 impl System for Fake {
     fn lsblk_json(&self) -> Result<String, String> { Ok(LSBLK.into()) }
     fn fetch_https(&self, _: &str) -> Result<Vec<u8>, String> { Ok(self.fetched.clone()) }
     fn sha256_file(&self, _: &str) -> Result<String, String> { Ok(ABC.into()) }
-    fn regular_file_len(&self, _: &str) -> Result<u64, String> { Ok(3) }
+    fn image_write_size(&self, _: &str) -> Result<u64, String> { Ok(self.write_size.unwrap_or(3)) }
     fn run_helper(&self, a: &[String], on: &mut dyn FnMut(&str)) -> Result<(), String> {
         self.helper_calls.borrow_mut().push(a.to_vec());
         for l in &self.helper_lines { on(l) }
@@ -145,4 +145,22 @@ fn write_params() -> Value { json!({"image":"/home/don/img.iso","device":"/dev/s
     assert!(b.sys.stored.borrow().is_none());
     assert!(last(&b, &req("flash.catalog.update", json!({"url":"https://e.test/c.json","sha256":h}))).ok);
     assert_eq!(last(&b, &req("flash.catalog.list", json!({}))).result.unwrap()["source"], "updated");
+}
+
+#[test] fn write_refuses_image_that_expands_past_the_device() {
+    // sdb in the fixture is 31406948352 bytes; an .img.xz whose index says one byte more is refused.
+    let b = bridge(Fake { write_size: Some(31_406_948_353), ..Default::default() });
+    let mut p = write_params(); p["image"] = json!("/home/don/raspios.img.xz");
+    let r = last(&b, &req("flash.image.write", p));
+    assert_eq!(cat(&r), "safety_refused");
+    assert!(r.error.unwrap().message.contains("expands"));
+    assert!(b.sys.helper_calls.borrow().is_empty());
+}
+
+#[test] fn host_write_size_reads_xz_index() {
+    use std::io::Write;
+    let data = vec![7u8; 1 << 20];
+    let mut e = xz2::write::XzEncoder::new(Vec::new(), 6); e.write_all(&data).unwrap();
+    let c = e.finish().unwrap();
+    assert_eq!(flash_core::image::write_size(&mut std::io::Cursor::new(c)).unwrap(), 1 << 20);
 }

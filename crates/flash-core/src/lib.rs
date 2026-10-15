@@ -4,3 +4,4 @@ pub mod catalog;
 pub mod checksum;
 pub mod devices;
 pub mod direct;
+pub mod image;

@@ -43,10 +43,10 @@ impl System for Host {
     fn sha256_file(&self, path: &str) -> Result<String, String> {
         flash_core::checksum::sha256_file(std::path::Path::new(path)).map_err(|e| e.to_string())
     }
-    fn regular_file_len(&self, path: &str) -> Result<u64, String> {
-        let m = std::fs::metadata(path).map_err(|e| e.to_string())?;
-        if !m.is_file() { return Err("image is not a regular file".into()) }
-        Ok(m.len())
+    fn image_write_size(&self, path: &str) -> Result<u64, String> {
+        let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        if !f.metadata().map_err(|e| e.to_string())?.is_file() { return Err("image is not a regular file".into()) }
+        flash_core::image::write_size(&mut f).map_err(|e| e.to_string())
     }
     fn run_helper(&self, args: &[String], on_line: &mut dyn FnMut(&str)) -> Result<(), String> {
         let helper = std::env::var("VFLASH_HELPER").unwrap_or_else(|_| "/usr/lib/victorious-flash/victorious-flash-helper".into());

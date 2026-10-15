@@ -20,7 +20,7 @@ pub struct Distro {
     /// What kind of image this entry is. Defaults to a desktop Linux ISO.
     #[serde(default)]
     pub kind: ImageKind,
-    /// Container format of the downloaded file (`iso` or raw `img`).
+    /// Container format of the downloaded file: `iso`, raw `img`, or `img-xz` (decompressed while writing).
     #[serde(default)]
     pub image_format: ImageFormat,
     /// Optional free-form notes (e.g. "unlock bootloader first").
@@ -30,11 +30,11 @@ pub struct Distro {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-pub enum ImageKind { #[default] LinuxIso, RootforgeOs }
+pub enum ImageKind { #[default] LinuxIso, RootforgeOs, RaspberryPiOs }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-pub enum ImageFormat { #[default] Iso, Img }
+pub enum ImageFormat { #[default] Iso, Img, ImgXz }
 
 /// The three ways to use an image.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -94,10 +94,24 @@ mod tests {
             assert!(d.iso_url.starts_with("https://"), "{}", d.id);
             assert!(d.checksum_url.starts_with("https://"), "{}", d.id);
             if let Some(h) = &d.sha256 { assert!(h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()), "{}", d.id); }
-            assert_eq!(d.kind, ImageKind::LinuxIso);
             assert!(d.modes().contains(&Mode::Usb) && d.modes().contains(&Mode::Sd));
         }
         assert!(parse_catalog(CATALOG_JSON).is_ok());
+    }
+
+    #[test]
+    fn raspberry_pi_os_entries_are_pinned_img_xz() {
+        let c = load_catalog().unwrap();
+        for id in ["raspios-lite-arm64", "raspios-arm64", "raspios-lite-armhf"] {
+            let d = c.iter().find(|d| d.id == id).unwrap_or_else(|| panic!("missing {id}"));
+            assert_eq!(d.kind, ImageKind::RaspberryPiOs);
+            assert_eq!(d.image_format, ImageFormat::ImgXz);
+            assert!(d.iso_url.starts_with("https://downloads.raspberrypi.com/") && d.iso_url.ends_with(&d.iso_filename));
+            assert_eq!(d.checksum_url, format!("{}.sha256", d.iso_url));
+            assert!(d.sha256.is_some(), "{id} must pin a hash");
+            assert!(!d.iso_url.contains("_latest"), "{id} must pin a dated release");
+            assert_eq!(d.modes(), vec![Mode::Usb, Mode::Sd]);
+        }
     }
 
     const BASE: &str = r#""name":"X","version":"1","description":"d","iso_url":"https://e.test/a.img","checksum_url":"https://e.test/SUMS","iso_filename":"a.img","signature_url":null,"homepage":"https://e.test""#;
