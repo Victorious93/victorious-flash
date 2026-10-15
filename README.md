@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" width="160" alt="Victorious Flash logo"></p>
+<p align="center"><img src="assets/logo-512.png" width="200" alt="Victorious Flash logo"></p>
 <h1 align="center">⚡ Victorious Flash</h1>
 <p align="center"><strong>Pick a Linux. Verify it. Flash it. Install it — victoriously.</strong></p>
 
