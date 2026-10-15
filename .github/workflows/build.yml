@@ -24,6 +24,7 @@ jobs:
       - name: Build AppImage + .deb
         run: npx tauri build --bundles appimage,deb
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: victorious-flash-linux
           retention-days: 1
