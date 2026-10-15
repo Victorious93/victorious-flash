@@ -3,50 +3,73 @@
 Status: P0 (plan only). No code in this PR.
 
 ## Goal
-An Android APK version of Victorious Flash, written in **Kotlin + Jetpack Compose**, living in the `android/` folder of this repo. It flashes drives from a phone or tablet over USB OTG, and joins the **DroidCommand AI fleet** (`Victorious93/droidcommand-AI`) as a companion.
+Don often has **no USB stick, only a phone**. So the first job of the Android app is to **turn the phone into a bootable USB drive**: plug the phone into a PC, and the PC sees an ISO/IMG as a USB disk and/or CD-ROM, boots it, and runs or installs Linux (like DriveDroid).
 
-## What the APK must do
-1. **Flash OS images to USB drives over OTG — no root.** Use the Android USB Host API to talk to the drive directly with USB Mass Storage Bulk-Only Transport (BOT) and SCSI commands (READ CAPACITY, WRITE(10)/(16), SYNCHRONIZE CACHE) to write raw blocks, like libaums does. Root fallback: if the device is rooted, write to `/dev/block/...` directly.
-2. **Write Raspberry Pi SD images.** Go through a USB SD card reader over OTG (same raw path). The phone's own internal SD slot needs root, so it is root-only. Stream-decompress `.img.xz` (and `.gz`, `.zip`) while writing, so the full image never sits on the phone.
-3. **Make a Ventoy-style multi-ISO USB.** From Android, write the layout: partition table (MBR or GPT), a large FAT32/exFAT data partition, and a small EFI/boot partition. Then copy ISOs onto the data partition as files.
-   - **Option A — reuse Ventoy:** Ventoy is GPLv3. We can ship its prebuilt boot images unchanged if we follow GPLv3 (credit it, include the license, link the matching source, and keep the parts we ship as clearly separate works). Pro: boots lots of ISOs, works with existing Ventoy tools. Con: license work, have to keep up with Ventoy's on-disk format.
-   - **Option B — our own GRUB2 loopback:** GRUB2 (also GPLv3) EFI + BIOS images plus a generated `grub.cfg` that uses `loopback` to boot each ISO. Pro: simple and we control it. Con: only works for ISOs that support loopback boot.
-   - Plan: prototype B first, look at A for broader ISO support; make the call in P4.
-4. **Curated distro list.** Each entry is tagged with what it supports: `loopback` (works on the multiboot USB), `dd-only` (must be written raw), `pi` (Raspberry Pi image). Reuse/extend the existing `catalog/` data.
+Writing to real USB sticks and SD cards comes later.
 
-## Safety rules (always on)
-- Check the image checksum (SHA-256) **before** writing; verify by reading back after writing.
-- Big, clear warnings that show the target's name, size and vendor.
-- **Typed confirmation** (e.g. type the drive size or `ERASE`) before any write.
-- Never wipe anything without that confirmation — not from the UI, not from the fleet.
-- Refuse non-removable devices. Only USB mass storage seen through USB Host is allowed; internal storage is never a target (root mode included, unless the user explicitly picks a removable SD slot).
+Built in **Kotlin + Jetpack Compose**, in the `android/` folder of this repo. Later it joins the **DroidCommand AI fleet** (`Victorious93/droidcommand-AI`) as a companion.
 
-## Joining the DroidCommand fleet
-- The APK registers as a **DroidCommand companion**: an AIDL bound service guarded by a **signature permission**, listed in `KnownCompanions` with a `CompanionDescriptor` (from `core-companion`), and checked by `DependencyGuard`.
-- Capability IDs, for example:
-  - `flash.devices.list` — read-only, list attached drives.
-  - `flash.image.verify` — check an image's checksum.
-  - `flash.image.write` — write an image. **Needs per-call approval on the phone** (same typed confirmation as the UI).
-  - `flash.multiboot.create`, `flash.multiboot.addIso` — also per-call approval.
-- Coordinate with the existing desktop **flash-bridge** protocol (the SSH JSON bridge used for external nodes): same message shapes and capability names, so the fleet can send a job to either desktop or phone.
+## The honest part: root is needed
+- Android has **no non-root API** that lets an app pretend to be a USB disk. Normal apps only get MTP/PTP.
+- On nearly all phones this mode needs **root**. The app changes the kernel's USB gadget setup:
+  - **Modern kernels (configfs):** under `/config/usb_gadget/<gadget>/`, create `functions/mass_storage.0`, set `lun.0/file` to the ISO, set `lun.0/cdrom=1` (CD-ROM) or `0` (disk), `lun.0/ro=1`, `lun.0/removable=1`, link the function into the config, then bind by writing the controller name (from `/sys/class/udc/`) to `UDC`.
+  - **Old kernels (legacy `android_usb`):** `/sys/class/android_usb/android0/` with `functions=mass_storage` and `f_mass_storage/lun/file`.
+- **Some kernels have no `mass_storage` function at all.** Then this mode can't work on that phone without a custom kernel, and the app has to say so plainly.
+- Without root, the app still verifies and manages images, and points the user to the later modes (OTG writing) or a desktop.
 
 ## Phases
-- **P0 — Plan.** This document.
-- **P1 — OTG detection + read-only inventory.** `android/` Gradle project, Compose UI, USB permission flow, list drives (vendor, size, removable), read sectors only. No writes.
-- **P2 — Raw image writer with verification.** BOT/SCSI write path, checksum before, read-back verify after, progress, cancel, all safety prompts.
-- **P3 — Pi SD + xz.** SD readers over OTG, streaming `.img.xz` decompression, Pi catalog entries, root-only internal SD slot option.
-- **P4 — Ventoy-style multiboot.** Partition table + FAT/exFAT + EFI writer, GRUB2 loopback config (and/or Ventoy images after the license call), ISO copy, loopback catalog tags.
-- **P5 — Fleet companion.** AIDL service, signature permission, KnownCompanions/CompanionDescriptor entry, DependencyGuard, capabilities with per-call approval, flash-bridge compatibility.
-- **P6 — Real-device testing.** Several phones (Android 10–15), hubs, sticks, SD readers; boot-test the results on real PCs and Pis.
+### P0 — Plan
+This document.
+
+### P1 — Phone as bootable USB (top priority)
+- **Capability check**, shown as a clear checklist: root available? configfs mounted / `usb_gadget` present? `mass_storage` function supported (try creating it, or check for `usb_f_mass_storage`)? A UDC controller found? Legacy `android_usb` instead? Show the result as "works / doesn't work, and why".
+- **Expose one verified ISO, read-only**, as a removable disk or a CD-ROM (the user picks; disk is the default for hybrid ISOs, CD-ROM for ISO-only images).
+- Verify the SHA-256 before exposing it.
+- **On stop** (button, unplug, app crash or reboot): unbind, remove our function, and **restore normal USB/MTP**. Back up the original gadget setup before changing anything, and keep a "restore USB" action.
+- **Never expose phone partitions** or block devices: only regular image files in the app's storage, opened read-only. Reject `/dev/block/*` and symlinks to it.
+- Long-running foreground service with a visible notification while exposed.
+
+### P2 — Multi-ISO image on the phone (Ventoy-style)
+- One disk image file on the phone: partition table + EFI/boot partition + FAT32/exFAT data partition holding many ISOs; a GRUB2 `grub.cfg` that boots each ISO with `loopback`.
+- Exposed through the same gadget mode (this one as a disk, may be read-write so ISOs can be added from the phone side when not exposed).
+- Licensing: GRUB2 and Ventoy are GPLv3. Start with our own GRUB2 loopback config; look at reusing Ventoy's prebuilt boot images for wider ISO support, and follow GPLv3 if we do (license, credit, source links).
+
+### P3 — Write real USB sticks over OTG (no root)
+USB Host API + USB Mass Storage Bulk-Only Transport/SCSI raw block writes (libaums-style). Root fallback: write the block device directly. Checksum before, read-back verify after.
+
+### P4 — Raspberry Pi SD writing
+Through a USB SD reader over OTG (the phone's own SD slot needs root). Streaming `.img.xz` decompression while writing.
+
+### P5 — DroidCommand fleet companion
+- AIDL bound service protected by a **signature permission**; entry in `KnownCompanions` with a `CompanionDescriptor` (`core-companion`); checked by `DependencyGuard`.
+- Capability IDs such as `flash.gadget.status`, `flash.gadget.expose`, `flash.gadget.stop`, `flash.devices.list`, `flash.image.write`. Anything that changes USB setup or writes to a drive needs **per-call approval on the phone**.
+- Use the same message shapes as the desktop flash-bridge (SSH JSON bridge for external nodes), so jobs can go to either one.
+
+### P6 — Testing on real devices
+Several rooted phones (configfs and legacy kernels), several PCs (UEFI + legacy BIOS, Secure Boot on/off), and real sticks and SD readers for P3–P4.
+
+## Curated distro list
+Each entry says which modes work:
+- `gadget-disk` — boots when the phone shows it as a USB disk (most **hybrid ISOs**: Ubuntu, Fedora, Debian live, Mint, Arch…).
+- `gadget-cdrom` — boots when shown as a CD-ROM (ISO-only images, e.g. some Windows/older ISOs).
+- `loopback` — works in the multi-ISO image (P2).
+- `dd-only` — must be written raw (P3).
+- `pi` — Raspberry Pi image (P4).
+Reuse/extend the existing `catalog/` data.
+
+## Safety
+- **Gadget mode rewrites the phone's USB gadget config.** Warn before the first use: USB/MTP/ADB/tethering will stop while the ISO is exposed, and a bad kernel may need a reboot to recover. Always back up and restore.
+- Exposed images are read-only (except the P2 multi-ISO image when the user asks), and never phone partitions.
+- **Write modes (P3/P4) erase the target drive.** Show name, size and vendor; require typed confirmation; never wipe without it; refuse non-removable devices.
+- Checksum (SHA-256) before exposing or writing; read-back verify after writing.
 
 ## Risks and unknowns
-- **USB BOT reliability:** some sticks/readers have quirks, stall, or need resets; long writes may fail midway.
-- **Power over OTG:** phones may not power hungry drives or readers; may need a powered hub.
-- **Write speed:** user-space BOT through the Host API is slower than a desktop; large images may take a long time and heat the phone.
-- **Android 14+ USB permission UX:** permission dialogs, re-asks after replug, background limits, foreground-service rules for long writes.
-- **exFAT writing** needs our own code or a library; FAT32 has a 4 GB file limit for ISOs.
-- **Licensing:** GPLv3 for Ventoy/GRUB2 boot images affects how we ship.
-- **Root fallback** varies a lot by device.
+- Many phones: no root, no `mass_storage` in the kernel, or vendor USB HALs that reset the gadget setup behind our back.
+- CD-ROM emulation support and quirks vary by kernel; some PCs won't boot from a phone gadget.
+- Android 14+ USB permission and foreground-service rules; ADB is lost while exposed.
+- USB BOT reliability, power over OTG, and write speed for P3/P4.
+- 4 GB file limit on FAT32; exFAT writer needed.
+- GPLv3 terms for GRUB2/Ventoy boot images.
 
 ## Rule
 PRs merge only when all tests are green.
