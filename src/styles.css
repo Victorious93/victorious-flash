@@ -1,6 +1,6 @@
 :root { --bg:#0B1530; --panel:#13214A; --accent:#39FF14; --accent2:#00FF85; --text:#ececf4; --muted:#9a9ab0; --red:#ff4d5e; font-family: Inter, system-ui, sans-serif; color: var(--text); background: var(--bg); }
 body { margin:0; } .app { max-width: 1000px; margin: 0 auto; padding: 16px; }
-header { display:flex; align-items:center; gap:12px; } .logo { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#0B1530; font-weight:900; border-radius:10px; width:40px; height:40px; display:grid; place-items:center; font-size:24px; }
+header { display:flex; align-items:center; gap:12px; } .logo { width:40px; height:40px; border-radius:10px; }
 h1 em { color: var(--accent); font-style: normal; }
 nav { display:flex; gap:8px; margin: 12px 0; } button { background:var(--panel); color:var(--text); border:1px solid #24366B; border-radius:8px; padding:8px 14px; cursor:pointer; }
 button.active, .sel { border-color: var(--accent) !important; } button.primary { background: var(--accent); color:#0B1530; font-weight:700; } button:disabled { opacity:.4; cursor:not-allowed; }

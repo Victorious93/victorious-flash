@@ -100,7 +100,7 @@ fn write_params() -> Value { json!({"image":"/home/don/img.iso","device":"/dev/s
     }
 }
 
-#[test] fn write_refuses_hash_mismatch_and_non_usb_catalog_entries() {
+#[test] fn write_refuses_hash_mismatch_and_unknown_catalog_entries() {
     let b = bridge(Fake::default());
     let mut p = write_params(); p["sha256"] = json!("0".repeat(64));
     assert_eq!(cat(&last(&b, &req("flash.image.write", p))), "verify_failed");
@@ -108,12 +108,8 @@ fn write_params() -> Value { json!({"image":"/home/don/img.iso","device":"/dev/s
     assert_eq!(cat(&last(&b, &req("flash.image.write", p))), "invalid_parameters");
     assert!(b.sys.helper_calls.borrow().is_empty());
 
-    let fake = Fake::default();
-    *fake.stored.borrow_mut() = Some(r#"[{"id":"pixel","name":"A","version":"1","description":"d","iso_url":"https://e.test/a.zip","checksum_url":"https://e.test/S","iso_filename":"a.zip","signature_url":null,"homepage":"https://e.test","kind":"android-image","flash_method":"fastboot","image_format":"zip"}]"#.into());
-    let b = bridge(fake);
-    let mut p = write_params(); p["catalog_id"] = json!("pixel");
-    let r = last(&b, &req("flash.image.write", p));
-    assert_eq!(cat(&r), "safety_refused");
+    let mut p = write_params(); p["catalog_id"] = json!("no-such-image");
+    assert_eq!(cat(&last(&b, &req("flash.image.write", p))), "invalid_parameters");
     assert!(b.sys.helper_calls.borrow().is_empty());
 }
 

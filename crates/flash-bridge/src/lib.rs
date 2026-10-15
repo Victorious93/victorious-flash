@@ -153,7 +153,7 @@ impl<S: System> Bridge<S> {
             "flash.capabilities.get" => Ok(json!({
                 "product": "victorious-flash", "version": VERSION, "protocol_major": BRIDGE_PROTOCOL_MAJOR,
                 "node_id": self.node_id, "operations": OPERATIONS,
-                "write_requires_confirmation": true, "privileged_writes_via": "pkexec victorious-flash-helper",
+                "write_requires_confirmation": true, "modes": ["usb", "sd"], "privileged_writes_via": "pkexec victorious-flash-helper",
             })),
             "flash.catalog.list" => {
                 let (source, entries) = self.catalog()?;
@@ -219,8 +219,7 @@ impl<S: System> Bridge<S> {
         let confirm = p.get("confirm").and_then(|v| v.as_str()).ok_or_else(|| refused("missing typed confirmation 'confirm' (the device name, e.g. sdb)"))?;
         if let Some(id) = p.get("catalog_id").and_then(|v| v.as_str()) {
             let (_, c) = self.catalog()?;
-            let e = c.iter().find(|d| d.id == id).ok_or_else(|| invalid(format!("unknown catalog_id '{id}'")))?;
-            if !e.is_usb_writable() { return Err(refused(format!("catalog entry '{id}' is not a raw USB image (flash_method/image_format)"))) }
+            c.iter().find(|d| d.id == id).ok_or_else(|| invalid(format!("unknown catalog_id '{id}'")))?;
         }
         let dev = self.eligible(device)?;
         if !devices::confirmation_matches(&dev, confirm) { return Err(refused("confirmation does not match the device name")) }

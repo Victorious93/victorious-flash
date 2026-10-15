@@ -7,10 +7,12 @@ Victorious Flash is a Linux desktop app (Tauri v2 · Rust · React + TypeScript 
 ## Branding
 Victorious navy (`#0B1530` base, `#13214A` panels) with an electric-green accent (`#39FF14`, gradient to `#00FF85`) for buttons, highlights, progress bars and the **V** icon. Red (`#FF4D5E`) is reserved strictly for danger: erase/flash warnings and errors.
 
-## Features (MVP)
-1. **Distro picker** — curated catalog (`catalog/distros.json`): Ubuntu, Fedora, Linux Mint, Debian, Pop!_OS, openSUSE Tumbleweed, Arch Linux, with official ISO and checksum URLs. Downloads with live progress and verifies **SHA-256** against the vendor's checksum file (GNU and BSD formats) or a pinned hash.
-2. **Safe USB flasher** — lists only removable/hotplug whole disks from `lsblk` (excludes NVMe/SATA internals, loop/zram/optical, read-only, >2 TiB, and anything hosting `/`, `/boot`, `/home`, swap…). You must **type the device name** to confirm. Writing happens in a tiny privileged helper launched with **pkexec**, which re-validates the target itself, writes, `fsync`s and **reads back to verify** the SHA-256.
-3. **Install guide** — backups, dual-boot vs wipe, boot-menu/BIOS keys by vendor, UEFI vs legacy, Secure Boot & MOK, partitioning basics.
+## Three modes
+1. **Direct install** (no stick): download and verify the ISO, then boot it from this computer's own disk with a GRUB loopback entry that the app generates. You paste it into `/etc/grub.d/40_custom` and run `update-grub`; the app never edits boot config itself. Currently Ubuntu and Linux Mint only (the casper loopback recipe).
+2. **USB**: the safe flasher. It lists only removable/hotplug whole disks from `lsblk` and excludes NVMe/SATA internals, loop/zram/optical, read-only, anything over 2 TiB, and anything hosting `/`, `/boot`, `/home`, swap and so on. You must **type the device name** to confirm. The write happens in a tiny privileged helper launched with **pkexec**, which re-validates the target itself, writes, `fsync`s and **reads back to verify** the SHA-256.
+3. **SD card**: the same writer and the same safeguards, filtered to SD cards (`mmcblkN` readers, or USB card readers). eMMC internal storage (any `mmcblkN` with `boot0`/`rpmb` siblings) is never offered.
+
+Common to all modes: a curated catalog (`catalog/distros.json`) with official image and checksum URLs. Every download is verified with **SHA-256** against the vendor's checksum file (GNU and BSD formats) or a pinned hash. The **install guide** covers backups, dual-boot vs wipe, boot-menu/BIOS keys by vendor, UEFI vs legacy, Secure Boot & MOK, and partitioning basics.
 
 ## Architecture
 ```
@@ -73,5 +75,5 @@ Node setup: `victorious-flash-bridge node-id` prints the node id, creating it un
 `command="/usr/bin/victorious-flash-bridge serve",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA…`
 SSH sessions have no polkit agent, so remote writes need a polkit rule that authorises `com.victorious.flash` for that user. That rule is deliberately not shipped by default.
 
-### Catalog: RootForge OS and Android images
-Catalog entries accept these optional fields: `kind` (`linux-iso` default, `rootforge-os`, `android-image`), `flash_method` (`usb-dd` default, `fastboot`, `recovery-sideload`), `image_format` (`iso` default, `img`, `zip`, `img-xz`), `device_codenames` and `notes`. The app and bridge only write `usb-dd` entries in `iso` or `img` format. Fastboot and sideload entries are listed for reference, and `flash.image.write` refuses them.
+### Catalog: RootForge OS images
+Entries accept optional `kind` (`linux-iso` by default, or `rootforge-os`), `image_format` (`iso` by default, or a raw `img`) and `notes`. Any entry can be written in USB or SD mode. Direct install is offered only for ISOs with a known loopback recipe. No RootForge OS entry ships yet, because `Victorious93/rootforge-os` has no published release with an image and checksum. Its `release.yml` is meant to produce one: it attaches the ISO with SHA-256 sums to a draft release, which a maintainer then publishes.
