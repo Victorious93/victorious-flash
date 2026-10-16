@@ -1,4 +1,4 @@
-use flash_core::{catalog, checksum, devices};
+use flash_core::{catalog, checksum, devices, direct};
 use futures_util::StreamExt;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -16,6 +16,14 @@ fn list_distros() -> Result<Vec<catalog::Distro>, String> { catalog::load_catalo
 async fn list_devices() -> Result<Vec<devices::UsbDevice>, String> {
     let out = tokio::process::Command::new("lsblk").args(devices::LSBLK_ARGS).output().await.map_err(err)?;
     devices::parse_and_filter(&String::from_utf8_lossy(&out.stdout)).map_err(err)
+}
+
+/// Direct-install mode: the GRUB loopback entry for a downloaded ISO (shown to the user, never written by the app).
+#[tauri::command]
+fn direct_entry(id: String, iso_path: String) -> Result<String, String> {
+    let d = catalog::load_catalog().map_err(err)?.into_iter().find(|d| d.id == id).ok_or("unknown distro")?;
+    direct::grub_entry(&d.id, &format!("{} {}", d.name, d.version), &iso_path)
+        .ok_or_else(|| "Direct install is not available for this image (or its path has unusual characters); use USB or SD.".into())
 }
 
 #[derive(Serialize)]
@@ -85,7 +93,7 @@ async fn flash(app: AppHandle, iso: String, device: String, typed_confirmation: 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![list_distros, list_devices, download_iso, flash])
+        .invoke_handler(tauri::generate_handler![list_distros, list_devices, download_iso, flash, direct_entry])
         .run(tauri::generate_context!())
         .expect("error while running Victorious Flash");
 }

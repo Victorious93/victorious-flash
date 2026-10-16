@@ -16,6 +16,7 @@
         "depends": ["policykit-1 | pkexec", "util-linux"],
         "files": {
           "/usr/lib/victorious-flash/victorious-flash-helper": "../target/release/victorious-flash-helper",
+          "/usr/bin/victorious-flash-bridge": "../target/release/victorious-flash-bridge",
           "/usr/share/polkit-1/actions/com.victorious.flash.policy": "../packaging/com.victorious.flash.policy"
         }
       }
