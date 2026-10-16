@@ -11,8 +11,8 @@ const STEPS = [
   { id: "mode", title: "2. Dual-boot or wipe?", body: <>
     <h4>Dual-boot (keep Windows)</h4><ul><li>Shrink the Windows partition in Windows Disk Management first (right-click C: → Shrink Volume); leave at least 30–50 GB unallocated.</li><li>Disable Windows Fast Startup (Control Panel → Power Options) and suspend BitLocker.</li><li>In the installer choose "Install alongside Windows" or use the free space.</li></ul>
     <h4>Wipe the disk (Linux only)</h4><ul><li>Simplest and safest for a fresh start — choose "Erase disk and install".</li><li><strong>Everything on the disk is permanently deleted</strong>, including Windows and recovery partitions.</li></ul></> },
-  { id: "keys", title: "3. Boot from the USB", body: <>
-    <p>Plug in the USB, restart, and tap the boot-menu key immediately at power-on. Use the firmware (BIOS/UEFI) setup key to change settings.</p>
+  { id: "keys", title: "3. Boot the installer (USB, SD or GRUB entry)", body: <>
+    <p>Direct install: just reboot and pick the new GRUB entry. USB/SD: plug it in, restart, and tap the boot-menu key immediately at power-on. Use the firmware (BIOS/UEFI) setup key to change settings.</p>
     <table><thead><tr><th>Brand</th><th>Boot menu</th><th>BIOS/UEFI setup</th></tr></thead><tbody>{BOOT_KEYS.map(([b, m, s]) => <tr key={b}><td>{b}</td><td>{m}</td><td>{s}</td></tr>)}</tbody></table>
     <p>From Windows you can also: Settings → System → Recovery → Advanced startup → Restart now → Use a device.</p>
     <p><strong>UEFI vs legacy BIOS:</strong> modern PCs use UEFI — pick the entry starting with "UEFI:" for your USB. Don't mix modes with an existing Windows install (Windows on GPT/UEFI ⇒ install Linux in UEFI mode).</p></> },

@@ -41,7 +41,14 @@ pub struct UsbDevice {
     pub model: String,
     pub transport: String,
     pub mounted: Vec<String>,
+    /// Which flashing mode this target belongs to.
+    pub media: Media,
 }
+
+/// Target media for the two write modes. (The third mode, Direct install, writes no device.)
+#[derive(Debug, Clone, Copy, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Media { Usb, Sd }
 
 pub const LSBLK_ARGS: &[&str] = &["--json", "--bytes", "--output",
     "NAME,PATH,TYPE,RM,HOTPLUG,RO,SIZE,MODEL,VENDOR,TRAN,MOUNTPOINT,MOUNTPOINTS"];
@@ -56,11 +63,20 @@ fn mounts(d: &LsblkDevice, out: &mut Vec<String>) {
     for c in &d.children { mounts(c, out); }
 }
 
-/// Keep only whole, writable, removable/hotplug disks that host no system mount.
+/// An SD card in a built-in reader shows up as `mmcblkN`. eMMC (soldered internal storage) also
+/// uses `mmcblkN`, but always exposes `mmcblkNboot0`/`mmcblkNrpmb` siblings; any mmc disk with
+/// those siblings is treated as internal and never offered.
+fn is_emmc(name: &str, all: &[LsblkDevice]) -> bool {
+    all.iter().any(|o| o.name == format!("{name}boot0") || o.name == format!("{name}rpmb"))
+}
+
+/// Keep only whole, writable, removable/hotplug disks (USB sticks, SD cards) that host no system mount.
 pub fn filter_removable(out: &LsblkOutput) -> Vec<UsbDevice> {
     out.blockdevices.iter().filter_map(|d| {
+        let is_mmc = d.name.starts_with("mmcblk") || d.tran.as_deref() == Some("mmc");
+        if is_mmc && (is_emmc(&d.name, &out.blockdevices) || d.name.contains("boot") || d.name.contains("rpmb")) { return None; }
         if d.kind.as_deref() != Some("disk") || d.ro { return None; }
-        if !(d.rm || d.hotplug || d.tran.as_deref() == Some("usb")) { return None; }
+        if !(d.rm || d.hotplug || d.tran.as_deref() == Some("usb") || is_mmc) { return None; }
         if matches!(d.tran.as_deref(), Some("nvme") | Some("sata") | Some("ata")) && !d.rm { return None; }
         if d.name.starts_with("loop") || d.name.starts_with("zram") || d.name.starts_with("sr") { return None; }
         let size = d.size.unwrap_or(0);
@@ -71,8 +87,14 @@ pub fn filter_removable(out: &LsblkOutput) -> Vec<UsbDevice> {
         let model = [d.vendor.as_deref(), d.model.as_deref()].iter().flatten()
             .map(|s| s.trim()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ");
         Some(UsbDevice { name: d.name.clone(), path: d.path.clone().unwrap_or(format!("/dev/{}", d.name)),
-            size, model, transport: d.tran.clone().unwrap_or_default(), mounted: m })
+            size, model, transport: d.tran.clone().unwrap_or_default(), mounted: m,
+            media: if is_mmc || looks_like_sd_reader(&d.model) { Media::Sd } else { Media::Usb } })
     }).collect()
+}
+
+/// USB card readers present as `sdX`; their model string usually says so.
+fn looks_like_sd_reader(model: &Option<String>) -> bool {
+    model.as_deref().map(|m| { let m = m.to_ascii_lowercase(); m.contains("sd") && (m.contains("card") || m.contains("reader")) || m.contains("sdxc") || m.contains("sdhc") }).unwrap_or(false)
 }
 
 pub fn parse_and_filter(json: &str) -> Result<Vec<UsbDevice>, serde_json::Error> {
@@ -116,8 +138,20 @@ mod tests {
         assert_eq!(devs[0].mounted, vec!["/media/don/STICK"]);
     }
     #[test]
+    fn sd_cards_allowed_emmc_refused() {
+        let j = r#"{"blockdevices":[
+          {"name":"mmcblk0","path":"/dev/mmcblk0","type":"disk","rm":false,"ro":false,"size":64000000000},
+          {"name":"mmcblk0boot0","path":"/dev/mmcblk0boot0","type":"disk","rm":false,"ro":true,"size":4194304},
+          {"name":"mmcblk1","path":"/dev/mmcblk1","type":"disk","rm":false,"ro":false,"size":31914983424},
+          {"name":"sdc","path":"/dev/sdc","type":"disk","rm":true,"hotplug":true,"ro":false,"size":15931539456,"model":"SD Card Reader","tran":"usb"},
+          {"name":"sdd","path":"/dev/sdd","type":"disk","rm":true,"hotplug":true,"ro":false,"size":15931539456,"model":"Cruzer","tran":"usb"}]}"#;
+        let d = parse_and_filter(j).unwrap();
+        let got: Vec<_> = d.iter().map(|x| (x.name.as_str(), x.media)).collect();
+        assert_eq!(got, vec![("mmcblk1", Media::Sd), ("sdc", Media::Sd), ("sdd", Media::Usb)]);
+    }
+    #[test]
     fn confirmation_requires_exact_name() {
-        let d = UsbDevice { name: "sdb".into(), path: "/dev/sdb".into(), size: 1, model: String::new(), transport: "usb".into(), mounted: vec![] };
+        let d = UsbDevice { name: "sdb".into(), path: "/dev/sdb".into(), size: 1, model: String::new(), transport: "usb".into(), mounted: vec![], media: Media::Usb };
         assert!(confirmation_matches(&d, "sdb"));
         assert!(confirmation_matches(&d, " /dev/sdb "));
         assert!(!confirmation_matches(&d, "sda"));
