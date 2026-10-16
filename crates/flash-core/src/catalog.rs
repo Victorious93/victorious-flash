@@ -23,6 +23,10 @@ pub struct Distro {
     /// Container format of the downloaded file: `iso`, raw `img`, or `img-xz` (decompressed while writing).
     #[serde(default)]
     pub image_format: ImageFormat,
+    /// Android "phone as bootable USB" modes this image is known to suit
+    /// (`gadget-disk`, `gadget-cdrom`). Empty = not offered in gadget mode.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gadget: Vec<String>,
     /// Optional free-form notes (e.g. "unlock bootloader first").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
@@ -70,6 +74,7 @@ pub fn parse_catalog(json: &str) -> Result<Vec<Distro>, CatalogError> {
         if !seen.insert(d.id.clone()) { return Err(bad("duplicate id")) }
         if !d.iso_url.starts_with("https://") || !d.checksum_url.starts_with("https://") { return Err(bad("URLs must be https")) }
         if d.iso_filename.contains('/') || d.iso_filename.is_empty() { return Err(bad("bad iso_filename")) }
+        if d.gadget.iter().any(|g| g != "gadget-disk" && g != "gadget-cdrom") { return Err(bad("unknown gadget tag")) }
         if let Some(h) = &d.sha256 { if !(h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit())) { return Err(bad("bad sha256")) } }
     }
     Ok(c)

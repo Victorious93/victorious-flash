@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.VictoriousFlash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B1530</item>
+        <item name="android:statusBarColor">#0B1530</item>
+        <item name="android:navigationBarColor">#0B1530</item>
+    </style>
+</resources>
