@@ -26,6 +26,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.victorious.flash.android.gadget.GadgetBackend
 import com.victorious.flash.android.gadget.GadgetService
 import com.victorious.flash.android.ui.*
+import com.victorious.flash.android.netboot.ServeService
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -39,6 +41,12 @@ class MainActivity : ComponentActivity() {
         startForegroundService(Intent(this, GadgetService::class.java).setAction(GadgetService.ACTION_EXPOSE)
             .putExtra(GadgetService.EXTRA_PATH, path).putExtra(GadgetService.EXTRA_CDROM, cdrom))
     }
+
+    fun serve(path: String) {
+        startForegroundService(Intent(this, ServeService::class.java).setAction(ServeService.ACTION_START).putExtra(ServeService.EXTRA_PATH, path))
+    }
+
+    fun stopServe() { startService(Intent(this, ServeService::class.java).setAction(ServeService.ACTION_STOP)) }
 
     fun stop() { startService(Intent(this, GadgetService::class.java).setAction(GadgetService.ACTION_STOP)) }
 }
@@ -61,6 +69,7 @@ private fun Check(ok: Boolean?, label: String) {
 private fun Screen(vm: MainViewModel) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val svc by GadgetService.state.collectAsStateWithLifecycle()
+    val srv by ServeService.state.collectAsStateWithLifecycle()
     val act = androidx.compose.ui.platform.LocalContext.current as MainActivity
     var confirm by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::import) }
@@ -69,15 +78,32 @@ private fun Screen(vm: MainViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.logo), null, Modifier.size(56.dp))
             Spacer(Modifier.width(12.dp))
-            Column { Text("Victorious Flash", fontWeight = FontWeight.Black, fontSize = 22.sp); Text("Phone as bootable USB", color = Electric) }
+            Column { Text("Victorious Flash", fontWeight = FontWeight.Black, fontSize = 22.sp); Text(if (ui.mode == Mode.ROOTED) "Phone as bootable USB (root)" else "Network boot over USB tethering (no root)", color = Electric) }
         }
 
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Danger.copy(alpha = 0.18f), RoundedCornerShape(12.dp)).padding(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Danger.copy(alpha = 0.22f), RoundedCornerShape(12.dp)).padding(14.dp)) {
+            Text("⚠ DISK WIPE RISK — read before installing", color = Danger, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Text(stringResource(R.string.install_wipe_warning))
+        }
+
+        Card("Mode") {
+            Text(if (ui.suHint) "Root (su) detected on this phone." else "No root detected. No-root mode is the one for you.", fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth().selectable(ui.mode == Mode.ROOTED, enabled = !svc.exposed && !srv.running) { vm.setMode(Mode.ROOTED) }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(ui.mode == Mode.ROOTED, { vm.setMode(Mode.ROOTED) }, enabled = !svc.exposed && !srv.running)
+                Text("Rooted: phone becomes a USB drive (works with any PC that boots USB)")
+            }
+            Row(Modifier.fillMaxWidth().selectable(ui.mode == Mode.NO_ROOT, enabled = !svc.exposed && !srv.running) { vm.setMode(Mode.NO_ROOT) }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(ui.mode == Mode.NO_ROOT, { vm.setMode(Mode.NO_ROOT) }, enabled = !svc.exposed && !srv.running)
+                Text("No root: UEFI HTTP Boot over USB tethering (only some PCs)")
+            }
+        }
+
+        if (ui.mode == Mode.ROOTED) Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Danger.copy(alpha = 0.18f), RoundedCornerShape(12.dp)).padding(14.dp)) {
             Text("⚠ Read this first", color = Danger, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.warning_long))
-        }
+        } else Card("How no-root mode works") { Text(stringResource(R.string.noroot_intro)) }
 
-        Card("1. Can this phone do it?") {
+        if (ui.mode == Mode.ROOTED) Card("1. Can this phone do it?") {
             val c = ui.caps
             Check(c?.rooted, "Root (su) available")
             Check(c?.let { it.backend != GadgetBackend.NONE }, "USB gadget backend: " + (c?.backend?.name?.lowercase() ?: "not checked"))
@@ -100,16 +126,17 @@ private fun Screen(vm: MainViewModel) {
             ui.selected?.let { Text("Download ${it.isoFilename} from ${it.isoUrl} on any device, then pick it below.", fontSize = 13.sp) }
             OutlinedTextField(ui.expectedSha, vm::setManualSha, label = { Text("Expected SHA-256") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             if (ui.expectedSource.isNotEmpty()) Text("Hash source: ${ui.expectedSource}", fontSize = 12.sp)
-            Button(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !ui.image.importing && !svc.exposed) { Text("Pick ISO/IMG…") }
+            Button(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !ui.image.importing && !svc.exposed && !srv.running) { Text("Pick ISO/IMG…") }
             if (ui.image.importing) Text("Copying + hashing ${ui.image.displayName}: ${ui.image.progress shr 20} MiB")
             ui.image.sha256?.let {
                 Text("${ui.image.displayName} · ${ui.image.bytes shr 20} MiB", fontSize = 13.sp)
                 Text("SHA-256 $it", fontSize = 11.sp)
-                Check(ui.verified, if (ui.verified) "Matches expected hash" else "Does NOT match (or no expected hash). Exposing is blocked.")
+                Check(ui.verified, if (ui.verified) "Matches expected hash" else "Does NOT match (or no expected hash). Sharing is blocked.")
             }
         }
 
-        Card("3. Expose to the PC (read-only)") {
+        if (ui.mode == Mode.NO_ROOT) NoRootCards(ui, srv, act)
+        if (ui.mode == Mode.ROOTED) Card("3. Expose to the PC (read-only)") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(!ui.cdrom, { vm.setCdrom(false) }); Text("USB disk (hybrid ISOs, default)")
             }
@@ -135,6 +162,51 @@ private fun Screen(vm: MainViewModel) {
         confirmButton = { TextButton(onClick = { confirm = false; ui.image.file?.let { act.expose(it.path, ui.cdrom) } }) { Text("Expose", color = Danger) } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun Step(n: Int, text: String) { Row(Modifier.padding(vertical = 2.dp)) { Text("$n.", color = Electric, fontWeight = FontWeight.Bold, modifier = Modifier.width(26.dp)); Text(text) } }
+
+@Composable
+private fun NoRootCards(ui: UiState, srv: ServeService.State, act: MainActivity) {
+    Card("3. Share over USB tethering") {
+        Step(1, "Connect the phone to the PC with a USB data cable.")
+        Step(2, "On the phone: Settings → Network & internet → Hotspot & tethering → turn on USB tethering. (Name varies: \"Mobile Hotspot and Tethering\" on Samsung.) Mobile data can stay off.")
+        Step(3, "Come back here and press Start server. The app shows the exact URL to type.")
+        val ready = ui.verified && ui.image.file != null
+        if (!srv.running) {
+            Button(onClick = { ui.image.file?.let { act.serve(it.path) } }, enabled = ready) { Text("Start server") }
+            if (!ready) Text("Verify an image in step 2 first.", fontSize = 13.sp)
+        } else {
+            Text("SERVING (read-only). Type this URL in the PC firmware:", color = Electric, fontWeight = FontWeight.Bold)
+            srv.urls.forEach { (a, url) ->
+                SelectionContainer { Text(url, color = Electric, fontWeight = FontWeight.Black, fontSize = 20.sp) }
+                Text("via ${a.iface} (" + when (a.kind) { com.victorious.flash.android.netboot.LocalAddr.Kind.USB_TETHER -> "USB tethering"; com.victorious.flash.android.netboot.LocalAddr.Kind.HOTSPOT -> "Wi-Fi hotspot"; else -> "other network" } + ")", fontSize = 12.sp)
+            }
+            Text("Sent: ${srv.bytesServed shr 20} MiB", fontSize = 13.sp)
+            if (srv.lastRequest.isNotEmpty()) Text("Last request: ${srv.lastRequest}", fontSize = 11.sp)
+            OutlinedButton(onClick = { act.stopServe() }) { Text("Stop server") }
+        }
+        if (srv.message.isNotEmpty()) Text(srv.message)
+    }
+    Card("4. On the PC: UEFI HTTP Boot") {
+        Step(1, "Power on and enter firmware setup (usually F2, F10, F1, Del or Esc).")
+        Step(2, "Make sure Boot mode is UEFI. Enable \"Network stack\" / \"IPv4 HTTP support\" / \"HTTP Boot\".")
+        Step(3, "Find \"HTTP Boot Configuration\" (often under Device Manager / Network). If it lists a USB network device (the phone), select it. If no device appears, this PC can't use the phone's USB network — stop here.")
+        Step(4, "Set IPv4 and enter the Boot URI exactly as shown above (http://…/ubuntu.iso). Save.")
+        Step(5, "Save & exit, then pick the new \"UEFI HTTP\" entry from the boot menu (F12/F9/F11/Esc).")
+        Step(6, "The firmware downloads the whole image into RAM (several minutes over USB) and boots it. When Ubuntu's menu appears, choose Try or Install.")
+    }
+    Card("Compatibility — honest notes") {
+        Text("Works only if ALL of these are true:", fontWeight = FontWeight.Bold)
+        Text("• PC firmware supports UEFI HTTP Boot with a manual URL (UEFI 2.5+; common on PCs from ~2017 on, but often hidden or missing on consumer boards).")
+        Text("• The firmware has a driver for the phone's USB network (RNDIS on older Android, NCM on newer). Most firmwares only drive built-in Ethernet or specific USB-Ethernet dongles. This is the most common failure.")
+        Text("• Plain http:// is allowed. Some firmwares are HTTPS-only (e.g. recent ThinkPad custom HTTPS boot).")
+        Text("• The URL may point to an .iso. Dell client BIOS Manual Mode documents only .efi URLs.")
+        Text("• The PC has enough RAM: the whole ISO is held in memory. Ubuntu Server (~3.2 GB) needs roughly 6 GB+, Ubuntu Desktop (~6 GB) roughly 12–16 GB+. Too little RAM fails with an out-of-resources error.")
+        Text("• Secure Boot may still apply: Ubuntu's ISO is signed, but firmware policy varies.")
+        Text("If it doesn't work: use Rooted mode (if your phone is rooted) or a USB stick. This mode has not been confirmed on real PCs yet.", color = Electric)
+    }
 }
 
 @Composable

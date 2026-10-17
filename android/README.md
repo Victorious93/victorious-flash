@@ -40,3 +40,17 @@ Needs the Android SDK (platform 36, build-tools 36.0.0) and JDK 17+. CI: `.githu
 ## Not verified yet
 Real rooted devices (configfs and legacy kernels), real PC boots (UEFI/legacy, disk vs CD-ROM), and
 vendor USB HALs that may reset the gadget behind the app's back. That is plan phase P6.
+
+## No-root mode (UEFI HTTP Boot over USB tethering) — experimental
+
+For unrooted phones. After the image's SHA-256 matches, the app runs a foreground-service HTTP server
+(`netboot/IsoHttpServer.kt`: GET/HEAD, single byte ranges, keep-alive, serves ONE file only, read-only)
+bound to the USB-tethering / hotspot / LAN IPv4 addresses on port 8080, and shows
+`http://<phone-ip>:8080/ubuntu.iso`. The user types that URL into the PC firmware's *HTTP Boot
+Configuration*. `.iso` is served as `application/vnd.efi.iso` so EDK II-style firmware boots it as a RAM disk.
+
+Requirements on the PC (any one failing = it won't work): UEFI HTTP Boot with manual URI, plain `http://`
+allowed, a firmware driver for the phone's USB network (RNDIS/NCM — the usual blocker), ISO URLs accepted
+(Dell client BIOS documents only `.efi`), and enough RAM to hold the whole ISO. **Not yet confirmed on real
+hardware.** The app auto-detects `su` (without invoking it) and defaults to Rooted mode when present; rooted
+mode is unchanged.
