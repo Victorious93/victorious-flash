@@ -21,7 +21,7 @@ timeout "$T" qemu-system-x86_64 -machine "$MACH" "${SMM[@]}" -m 3072 -smp 2 -dis
 QPID=$!
 need="/boot/bootx64.efi /boot//grubx64.efi grub.cfg /casper/vmlinuz /casper/initrd /ubuntu.iso"
 while kill -0 $QPID 2>/dev/null; do
-  ok=1; for p in $need; do grep -q "GET [^ ]*$p host=10.0.2.2:8080" "$OUT/serve.log" || ok=0; done
+  ok=1; for p in $need; do grep -q "GET [^ ]*$p host=10.0.2.2" "$OUT/serve.log" || ok=0; done
   [ $ok = 1 ] && { sleep 20; break; }
   sleep 10
 done
@@ -30,5 +30,10 @@ pkill -f "Gradle Test Executor" 2>/dev/null; pkill -f GradleWrapperMain 2>/dev/n
 tr -d '\r' < "$OUT/serial.raw" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > "$OUT/serial.log" 2>/dev/null
 echo "== requests"; grep -v '\.lst ' "$OUT/serve.log"
 echo "== serial tail"; tail -c 1500 "$OUT/serial.log"
-fail=0; for p in $need; do grep -q "GET [^ ]*$p host=10.0.2.2:8080" "$OUT/serve.log" && echo "OK   $p (port 8080 kept)" || { echo "MISS $p"; fail=1; }; done
+# Every request arrives on :8080 (that is the only listener). The Host header shows whether the client
+# also *names* the port: OVMF's first fetch omits it (host=10.0.2.2), shim/GRUB/casper include :8080.
+fail=0; for p in $need; do
+  l=$(grep -m1 "GET [^ ]*$p host=10.0.2.2" "$OUT/serve.log") || { echo "MISS $p"; fail=1; continue; }
+  echo "OK   $p  [$(echo "$l" | grep -o 'host=[^ ]*')]"
+done
 exit $fail
