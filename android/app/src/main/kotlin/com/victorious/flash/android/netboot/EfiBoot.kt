@@ -24,9 +24,9 @@ object EfiBoot {
     /**
      * Where GRUB looks for grub.cfg over HTTP: Ubuntu's netboot GRUB uses $prefix=(http,server)/grub
      * (server root, not the .efi's directory); the ISO's CD GRUB falls back to ($root)/boot/grub.
-     * Serve the same config at all of them.
+     * In the QEMU/OVMF run, Ubuntu 24.04's CD GRUB 2.12 probed HEAD /grub.cfg (server root). Serve the same config at all of them.
      */
-    val grubCfgPaths = listOf("/grub/grub.cfg", "/grub/x86_64-efi/grub.cfg", "/boot/grub/grub.cfg", "/boot/grub/x86_64-efi/grub.cfg")
+    val grubCfgPaths = listOf("/grub.cfg", "/grub/grub.cfg", "/grub/x86_64-efi/grub.cfg", "/boot/grub/grub.cfg", "/boot/grub/x86_64-efi/grub.cfg")
 
     data class Plan(val files: Map<String, Iso9660.Entry>, val missing: List<String>) {
         val usable get() = missing.isEmpty()
@@ -66,5 +66,18 @@ object EfiBoot {
     /** Only offer the official URL when it is an https releases.ubuntu.com/cdimage .iso link. */
     fun officialUrlOrNull(u: String?): String? = u?.takeIf {
         Regex("^https://(releases|cdimage)\\.ubuntu\\.com/[A-Za-z0-9._/+-]+\\.iso$").matches(it)
+    }
+
+    /** The exact route table ServeService uses: raw ISO + (if usable) EFI files and grub.cfg. */
+    fun routes(f: File, urlPath: String, officialUrl: String?): Pair<Map<String, Resource>, Plan> {
+        val routes = LinkedHashMap<String, Resource>()
+        routes[urlPath] = Resource.Slice(f, 0, f.length(), IsoHttpServer.contentType(f.name))
+        val plan = if (f.extension.equals("iso", true)) plan(f) else Plan(emptyMap(), listOf("not an .iso"))
+        if (plan.usable) {
+            plan.files.forEach { (served, e) -> routes[served] = Resource.Slice(f, e.offset, e.length, IsoHttpServer.contentType(served)) }
+            val cfg = Resource.Generated("text/plain") { hostPort -> grubCfg("http://$hostPort$urlPath", officialUrl).toByteArray() }
+            grubCfgPaths.forEach { routes[it] = cfg }
+        }
+        return routes to plan
     }
 }

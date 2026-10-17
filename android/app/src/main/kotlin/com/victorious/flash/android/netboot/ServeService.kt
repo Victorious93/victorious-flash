@@ -55,15 +55,8 @@ class ServeService : Service() {
         val addrs = Tethering.current()
         if (addrs.isEmpty()) { _state.value = State(message = "No USB tethering / hotspot / Wi-Fi address found. Turn on USB tethering first, then press Start again."); stopSelf(); return }
         val urlPath = urlPathFor(f)
-        val routes = LinkedHashMap<String, Resource>()
-        routes[urlPath] = Resource.Slice(f, 0, f.length(), IsoHttpServer.contentType(f.name))
         // Lighter .efi path: Ubuntu's signed shim + GRUB + kernel + initrd, read straight out of the verified ISO.
-        val plan = if (f.extension.equals("iso", true)) EfiBoot.plan(f) else EfiBoot.Plan(emptyMap(), listOf("not an .iso"))
-        if (plan.usable) {
-            plan.files.forEach { (served, e) -> routes[served] = Resource.Slice(f, e.offset, e.length, IsoHttpServer.contentType(served)) }
-            val cfg = Resource.Generated("text/plain") { hostPort -> EfiBoot.grubCfg("http://$hostPort$urlPath", officialUrl).toByteArray() }
-            EfiBoot.grubCfgPaths.forEach { routes[it] = cfg }
-        }
+        val (routes, plan) = EfiBoot.routes(f, urlPath, officialUrl)
         val srv = IsoHttpServer(routes, addrs.map(Tethering::toInet), PORT) { line -> _state.value = _state.value.copy(lastRequest = line, bytesServed = server?.bytesServed?.get() ?: 0) }
         try { srv.start() } catch (e: Exception) {
             _state.value = State(message = "Could not start server on port $PORT: ${e.message}"); stopSelf(); return
