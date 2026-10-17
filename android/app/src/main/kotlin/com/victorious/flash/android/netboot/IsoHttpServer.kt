@@ -14,26 +14,37 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
+/** Something the server can send at one fixed path. */
+sealed class Resource {
+    /** [length] bytes of [file] starting at [offset] (whole files, or files inside the ISO). */
+    data class Slice(val file: File, val offset: Long, val length: Long, val contentType: String) : Resource()
+    /** Generated per request; gets the server address the client connected to (e.g. "192.168.42.129:8080"). */
+    class Generated(val contentType: String, val body: (hostPort: String) -> ByteArray) : Resource()
+}
+
 /**
- * Minimal read-only HTTP/1.1 server for UEFI HTTP Boot. Serves exactly ONE file at [urlPath]
+ * Minimal read-only HTTP/1.1 server for UEFI HTTP Boot. Serves only the fixed [routes]
  * (GET/HEAD, single byte-range requests). No directory listing, no other paths, no uploads.
  * Pure JVM so it is unit-tested without Android.
  */
 class IsoHttpServer(
-    private val file: File,
-    val urlPath: String,
+    private val routes: Map<String, Resource>,
     private val bindAddresses: List<InetAddress>,
     private val port: Int = 0,
     private val log: (String) -> Unit = {},
 ) {
+    /** Single-file convenience (the raw-ISO mode). */
+    constructor(file: File, urlPath: String, bindAddresses: List<InetAddress>, port: Int = 0, log: (String) -> Unit = {}) :
+        this(mapOf(urlPath to Resource.Slice(file, 0, file.length(), contentType(file.name))), bindAddresses, port, log)
+
     private val sockets = mutableListOf<ServerSocket>()
     private var pool: ExecutorService? = null
     val bytesServed = AtomicLong(0)
     @Volatile var boundPort: Int = -1; private set
 
     fun start() {
-        require(file.isFile) { "Image not found" }
-        require(urlPath.startsWith("/")) { "urlPath must start with /" }
+        require(routes.isNotEmpty() && routes.keys.all { it.startsWith("/") }) { "paths must start with /" }
+        routes.values.filterIsInstance<Resource.Slice>().forEach { require(it.file.isFile) { "Image not found" } }
         val p = Executors.newCachedThreadPool { r -> Thread(r, "iso-http").apply { isDaemon = true } }
         pool = p
         var chosen = port
@@ -72,7 +83,7 @@ class IsoHttpServer(
         while (true) {
             val req = readRequest(input) ?: return
             log("${sock.inetAddress.hostAddress} ${req.method} ${req.target} ${req.headers["range"] ?: ""}")
-            val keep = respond(req, out)
+            val keep = respond(req, out, "${sock.localAddress.hostAddress}:${sock.localPort}")
             out.flush()
             if (!keep) return
         }
@@ -109,19 +120,21 @@ class IsoHttpServer(
     }
 
     /** Returns whether the connection may be kept alive. */
-    private fun respond(req: Request, out: OutputStream): Boolean {
+    private fun respond(req: Request, out: OutputStream, hostPort: String): Boolean {
         val keep = !req.headers["connection"].equals("close", ignoreCase = true)
         if (req.method != "GET" && req.method != "HEAD") return simple(out, 405, "Method Not Allowed", false, "Allow: GET, HEAD\r\n")
         val path = req.target.substringBefore('?')
-        if (path != urlPath) return simple(out, 404, "Not Found", keep)
-        val len = file.length()
+        val res = routes[path] ?: return simple(out, 404, "Not Found", keep)
+        val generated = (res as? Resource.Generated)?.body?.invoke(hostPort)
+        val len = generated?.size?.toLong() ?: (res as Resource.Slice).length
+        val type = (res as? Resource.Generated)?.contentType ?: (res as Resource.Slice).contentType
         val range = req.headers["range"]?.let { parseRange(it, len) }
         if (range == RangeResult.Unsatisfiable) return simple(out, 416, "Range Not Satisfiable", keep, "Content-Range: bytes */$len\r\n")
         val (start, end) = (range as? RangeResult.Ok)?.let { it.start to it.end } ?: (0L to len - 1)
         val n = if (len == 0L) 0 else end - start + 1
         val status = if (range is RangeResult.Ok) "206 Partial Content" else "200 OK"
         val h = StringBuilder("HTTP/1.1 $status\r\n")
-            .append("Content-Type: ${contentType(file.name)}\r\n")
+            .append("Content-Type: $type\r\n")
             .append("Content-Length: $n\r\n")
             .append("Accept-Ranges: bytes\r\n")
             .append("Cache-Control: no-store\r\n")
@@ -130,8 +143,10 @@ class IsoHttpServer(
         h.append("\r\n")
         out.write(h.toString().toByteArray(Charsets.US_ASCII))
         if (req.method == "HEAD" || n == 0L) return keep
-        RandomAccessFile(file, "r").use { raf ->
-            raf.seek(start)
+        if (generated != null) { out.write(generated, start.toInt(), n.toInt()); bytesServed.addAndGet(n); return keep }
+        res as Resource.Slice
+        RandomAccessFile(res.file, "r").use { raf ->
+            raf.seek(res.offset + start)
             val buf = ByteArray(256 * 1024)
             var left = n
             while (left > 0) {

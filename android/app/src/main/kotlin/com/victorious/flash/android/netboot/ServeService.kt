@@ -19,12 +19,13 @@ import java.io.File
 
 /** No-root mode: serves the verified image over HTTP on tethering/hotspot interfaces until stopped. */
 class ServeService : Service() {
-    data class State(val running: Boolean = false, val urls: List<Pair<LocalAddr, String>> = emptyList(), val bytesServed: Long = 0, val lastRequest: String = "", val message: String = "")
+    data class State(val running: Boolean = false, val urls: List<Pair<LocalAddr, String>> = emptyList(), val efiUrls: List<String> = emptyList(), val efiProblem: String = "", val officialOffered: Boolean = false, val bytesServed: Long = 0, val lastRequest: String = "", val message: String = "")
 
     companion object {
         const val ACTION_START = "com.victorious.flash.android.SERVE_START"
         const val ACTION_STOP = "com.victorious.flash.android.SERVE_STOP"
         const val EXTRA_PATH = "path"
+        const val EXTRA_OFFICIAL_URL = "official_url"
         const val PORT = 8080
         private const val CHANNEL = "serve"
         private val _state = MutableStateFlow(State())
@@ -40,13 +41,13 @@ class ServeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> start(intent.getStringExtra(EXTRA_PATH))
+            ACTION_START -> start(intent.getStringExtra(EXTRA_PATH), EfiBoot.officialUrlOrNull(intent.getStringExtra(EXTRA_OFFICIAL_URL)))
             ACTION_STOP -> stopSelf()
         }
         return START_NOT_STICKY
     }
 
-    private fun start(path: String?) {
+    private fun start(path: String?, officialUrl: String?) {
         startInForeground()
         server?.stop()
         val f = path?.let(::File)
@@ -54,7 +55,16 @@ class ServeService : Service() {
         val addrs = Tethering.current()
         if (addrs.isEmpty()) { _state.value = State(message = "No USB tethering / hotspot / Wi-Fi address found. Turn on USB tethering first, then press Start again."); stopSelf(); return }
         val urlPath = urlPathFor(f)
-        val srv = IsoHttpServer(f, urlPath, addrs.map(Tethering::toInet), PORT) { line -> _state.value = _state.value.copy(lastRequest = line, bytesServed = server?.bytesServed?.get() ?: 0) }
+        val routes = LinkedHashMap<String, Resource>()
+        routes[urlPath] = Resource.Slice(f, 0, f.length(), IsoHttpServer.contentType(f.name))
+        // Lighter .efi path: Ubuntu's signed shim + GRUB + kernel + initrd, read straight out of the verified ISO.
+        val plan = if (f.extension.equals("iso", true)) EfiBoot.plan(f) else EfiBoot.Plan(emptyMap(), listOf("not an .iso"))
+        if (plan.usable) {
+            plan.files.forEach { (served, e) -> routes[served] = Resource.Slice(f, e.offset, e.length, IsoHttpServer.contentType(served)) }
+            val cfg = Resource.Generated("text/plain") { hostPort -> EfiBoot.grubCfg("http://$hostPort$urlPath", officialUrl).toByteArray() }
+            EfiBoot.grubCfgPaths.forEach { routes[it] = cfg }
+        }
+        val srv = IsoHttpServer(routes, addrs.map(Tethering::toInet), PORT) { line -> _state.value = _state.value.copy(lastRequest = line, bytesServed = server?.bytesServed?.get() ?: 0) }
         try { srv.start() } catch (e: Exception) {
             _state.value = State(message = "Could not start server on port $PORT: ${e.message}"); stopSelf(); return
         }
@@ -62,7 +72,10 @@ class ServeService : Service() {
         wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "vflash:serve").apply { acquire(4 * 60 * 60 * 1000L) }
         @Suppress("DEPRECATION")
         wifi = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager).createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "vflash:serve").apply { acquire() }
-        _state.value = State(running = true, urls = addrs.map { it to "http://${it.ip}:${srv.boundPort}$urlPath" }, message = "Serving ${f.length() shr 20} MiB read-only.")
+        _state.value = State(running = true, urls = addrs.map { it to "http://${it.ip}:${srv.boundPort}$urlPath" },
+            efiUrls = if (plan.usable) addrs.map { "http://${it.ip}:${srv.boundPort}${EfiBoot.SHIM}" } else emptyList(),
+            efiProblem = if (plan.usable) "" else "This image has no Ubuntu-style EFI boot files (missing: ${plan.missing.joinToString()}). Use the raw-ISO URL.",
+            officialOffered = plan.usable && officialUrl != null, message = "Serving ${f.length() shr 20} MiB read-only.")
     }
 
     override fun onDestroy() {
