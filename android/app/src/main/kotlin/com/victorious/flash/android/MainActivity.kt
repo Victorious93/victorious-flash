@@ -79,7 +79,7 @@ private fun Screen(vm: MainViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.logo), null, Modifier.size(56.dp))
             Spacer(Modifier.width(12.dp))
-            Column { Text("Victorious Flash", fontWeight = FontWeight.Black, fontSize = 22.sp); Text(if (ui.mode == Mode.ROOTED) "Phone as bootable USB (root)" else "Network boot over USB tethering (no root)", color = Electric) }
+            Column { Text("Victorious Flash", fontWeight = FontWeight.Black, fontSize = 22.sp); Text(when (ui.mode) { Mode.ROOTED -> "Phone as bootable USB (root)"; Mode.NO_ROOT -> "Network boot over USB tethering (no root)"; Mode.OTG -> "Write to USB stick over OTG (no root)" }, color = Electric) }
         }
 
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Danger.copy(alpha = 0.22f), RoundedCornerShape(12.dp)).padding(14.dp)) {
@@ -97,12 +97,17 @@ private fun Screen(vm: MainViewModel) {
                 RadioButton(ui.mode == Mode.NO_ROOT, { vm.setMode(Mode.NO_ROOT) }, enabled = !svc.exposed && !srv.running)
                 Text("No root: UEFI HTTP Boot over USB tethering (only some PCs)")
             }
+            Row(Modifier.fillMaxWidth().selectable(ui.mode == Mode.OTG, enabled = !svc.exposed && !srv.running) { vm.setMode(Mode.OTG) }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(ui.mode == Mode.OTG, { vm.setMode(Mode.OTG) }, enabled = !svc.exposed && !srv.running)
+                Text("No root: write to a USB stick plugged into this phone (OTG), verified")
+            }
         }
 
         if (ui.mode == Mode.ROOTED) Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Danger.copy(alpha = 0.18f), RoundedCornerShape(12.dp)).padding(14.dp)) {
             Text("⚠ Read this first", color = Danger, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.warning_long))
-        } else Card("How no-root mode works") { Text(stringResource(R.string.noroot_intro)) }
+        } else if (ui.mode == Mode.NO_ROOT) Card("How no-root mode works") { Text(stringResource(R.string.noroot_intro)) }
+        else Card("How Write to USB stick works") { Text(stringResource(R.string.otg_intro)) }
 
         if (ui.mode == Mode.ROOTED) Card("1. Can this phone do it?") {
             val c = ui.caps
@@ -137,6 +142,7 @@ private fun Screen(vm: MainViewModel) {
         }
 
         if (ui.mode == Mode.NO_ROOT) NoRootCards(ui, srv, act)
+        if (ui.mode == Mode.OTG) OtgCards(ui)
         if (ui.mode == Mode.ROOTED) Card("3. Expose to the PC (read-only)") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(!ui.cdrom, { vm.setCdrom(false) }); Text("USB disk (hybrid ISOs, default)")
