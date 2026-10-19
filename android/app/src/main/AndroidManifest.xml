@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="false"
@@ -25,6 +28,14 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a read-only disk image exposed over the USB gadget (phone as bootable USB) and restores normal USB when stopped." />
+        </service>
+        <service
+            android:name=".netboot.ServeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Serves one verified, read-only disk image over HTTP on the USB-tethering / hotspot link so a PC can UEFI HTTP Boot it. Runs only while the user keeps it on." />
         </service>
     </application>
 </manifest>

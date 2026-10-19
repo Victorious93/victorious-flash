@@ -13,6 +13,7 @@ import com.victorious.flash.android.gadget.GadgetProbe
 import com.victorious.flash.android.gadget.GadgetService
 import com.victorious.flash.android.gadget.SuRootShell
 import com.victorious.flash.android.image.ImageVerifier
+import com.victorious.flash.android.netboot.RootHint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,11 @@ data class ImageState(
     val importing: Boolean = false,
 )
 
+enum class Mode { ROOTED, NO_ROOT }
+
 data class UiState(
+    val mode: Mode = Mode.NO_ROOT,
+    val suHint: Boolean = false,
     val probing: Boolean = false,
     val caps: Capabilities? = null,
     val hasBackup: Boolean = false,
@@ -51,6 +56,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<UiState> = _ui
 
     init {
+        // Auto-detect: if an su binary exists, default to rooted mode and run the full probe (may show the
+        // superuser prompt). Otherwise default to No-root. The user can switch modes either way.
+        val su = RootHint.suBinaryPresent()
+        _ui.value = _ui.value.copy(suHint = su, mode = if (su) Mode.ROOTED else Mode.NO_ROOT)
+        if (su) probe()
         viewModelScope.launch(Dispatchers.IO) {
             val json = app.assets.open("distros.json").bufferedReader().readText()
             _ui.value = _ui.value.copy(catalog = runCatching { Catalog.parseGadgetEntries(json) }.getOrDefault(emptyList()))
@@ -63,8 +73,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val caps = GadgetProbe(shell).probe()
         GadgetService.capabilities = caps
         val backup = caps.rooted && GadgetController(shell, GadgetService.backupDir(getApplication())).hasBackup()
-        _ui.value = _ui.value.copy(probing = false, caps = caps, hasBackup = backup)
+        // Root present but gadget unusable (kernel/UDC): fall back to No-root as the suggested mode.
+        val mode = if (_ui.value.mode == Mode.ROOTED && !caps.gadgetModeUsable && !backup) Mode.NO_ROOT else _ui.value.mode
+        _ui.value = _ui.value.copy(probing = false, caps = caps, hasBackup = backup, mode = mode)
     }
+
+    fun setMode(m: Mode) { _ui.value = _ui.value.copy(mode = m) }
 
     fun setCdrom(v: Boolean) { _ui.value = _ui.value.copy(cdrom = v) }
 

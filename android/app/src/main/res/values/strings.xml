@@ -6,4 +6,10 @@
     <string name="stop_restore">Stop &amp; restore USB</string>
     <string name="warning_long">This mode needs ROOT and rewrites the phone\'s USB gadget configuration. While an image is exposed, normal USB stops: no file transfer (MTP), no ADB, no USB tethering. Your PC will only see the disk image. Stop restores the original setup. If restore ever fails, rebooting the phone resets USB. Only a verified image file is shared, read-only. The phone\'s own storage and partitions are never exposed. Some kernels can\'t do this at all.</string>
     <string name="warning_confirm">The phone\'s USB will switch to a read-only disk. MTP, ADB and tethering stop until you press Stop &amp; restore USB. If the phone misbehaves, reboot it to restore USB. Continue?</string>
+    <string name="channel_serve">Serve image to PC (no root)</string>
+    <string name="serve_notif_title">Serving image to the PC over HTTP (read-only)</string>
+    <string name="serve_notif_text">Keep USB tethering on. Tap Stop when the PC has booted.</string>
+    <string name="serve_stop">Stop server</string>
+    <string name="install_wipe_warning">INSTALLING UBUNTU CAN ERASE THE PC\'S DISK. This app never touches any disk: it only shares a read-only image. But once the PC boots the installer, choosing \"Erase disk and install Ubuntu\" (or picking the wrong drive) permanently deletes everything on that drive: Windows, files, photos, other partitions. Back up first. Read every installer screen. If you want to keep Windows, choose \"Install alongside\" or manual partitioning, and double-check the drive name and size before you click Install.</string>
+    <string name="noroot_intro">No root needed. The phone shares the verified image over USB tethering as a tiny web server, and the PC\'s firmware downloads it with UEFI HTTP Boot. This only works on PCs whose firmware has HTTP Boot with a manual URL AND can use the phone\'s USB network (RNDIS/NCM) before the OS loads. Many PCs can\'t. See the compatibility notes.</string>
 </resources>
