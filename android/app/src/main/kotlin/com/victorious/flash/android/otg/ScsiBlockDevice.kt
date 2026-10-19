@@ -73,7 +73,7 @@ class ScsiBlockDevice(private val t: BulkTransport, private val lun: Int = 0, pr
         if (r < 0 && t.clearHalt(true)) r = t.bulkIn(raw, 0, raw.size, timeoutMs) // BOT 6.7.2: stall on CSW, clear and retry once
         val csw = try { Bot.parseCsw(raw, r, myTag) } catch (e: BotException) { t.resetRecovery(); throw if (r < 0) IOException(UNPLUG_HINT) else e }
         when (csw.status) {
-            Bot.Csw.STATUS_PASSED -> return moved - maxOf(0, csw.residue - (len - moved)).coerceAtMost(moved)
+            Bot.Csw.STATUS_PASSED -> return moved
             Bot.Csw.STATUS_PHASE_ERROR -> { t.resetRecovery(); throw BotException("phase error on SCSI op 0x%02X".format(cdb[0])) }
             else -> throw ScsiException("SCSI op 0x%02X failed".format(cdb[0]), if (cdb[0].toInt() == Scsi.REQUEST_SENSE) null else requestSense())
         }
