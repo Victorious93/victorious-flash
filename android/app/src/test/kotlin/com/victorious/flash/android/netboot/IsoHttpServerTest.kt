@@ -89,6 +89,29 @@ class IsoHttpServerTest {
         }
     }
 
+    @Test fun collapsesDoubleSlashesLikeShimSends() {
+        assertEquals(200, get("/boot//../ubuntu.iso".replace("/boot//../", "//")).responseCode)
+        assertEquals(404, get("/x//ubuntu.iso").responseCode)
+    }
+
+    @Test fun hostPortUsesHeaderIpButRealPort() {
+        assertEquals("10.0.2.2:8080", IsoHttpServer.hostPortFor("10.0.2.2", "127.0.0.1", 8080))
+        assertEquals("10.0.2.2:8080", IsoHttpServer.hostPortFor("10.0.2.2:80", "127.0.0.1", 8080))
+        assertEquals("192.168.42.129:8080", IsoHttpServer.hostPortFor("evil.example", "192.168.42.129", 8080))
+        assertEquals("192.168.42.129:8080", IsoHttpServer.hostPortFor(null, "192.168.42.129", 8080))
+    }
+
+    /** GRUB probes missing files with HEAD on one keep-alive connection; a stray 404 body broke the next reply. */
+    @Test fun head404HasNoBodySoNextResponseParses() {
+        Socket("127.0.0.1", server.boundPort).use { s ->
+            val out = s.getOutputStream(); val inp = s.getInputStream()
+            out.write("HEAD /missing.lst HTTP/1.1\r\nHost: x\r\n\r\nHEAD /ubuntu.iso HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray()); out.flush()
+            fun headers(): String { val sb = StringBuilder(); while (!sb.endsWith("\r\n\r\n")) sb.append(inp.read().toChar()); return sb.toString() }
+            assertEquals("HTTP/1.1 404 Not Found", headers().lines().first())
+            assertEquals("HTTP/1.1 200 OK", headers().lines().first())
+        }
+    }
+
     @Test fun parseRangeRules() {
         assertEquals(RangeResult.Ok(0, 99), IsoHttpServer.parseRange("bytes=0-99", 1000))
         assertEquals(RangeResult.Ok(500, 999), IsoHttpServer.parseRange("bytes=500-5000", 1000))

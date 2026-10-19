@@ -1,0 +1,41 @@
+name: netboot-qemu
+on:
+  pull_request:
+    branches: ['android/**', 'feat/android-gadget']
+    paths: ['android/**', '.github/workflows/netboot-qemu.yml']
+  workflow_dispatch: {}
+jobs:
+  efi-http-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults: { run: { working-directory: android } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: android-actions/setup-android@v3
+        with: { packages: 'platforms;android-36 build-tools;36.0.0' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install QEMU + OVMF, enable KVM if present
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq qemu-system-x86 ovmf
+          if [ -e /dev/kvm ]; then echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666"' | sudo tee /etc/udev/rules.d/99-kvm.rules; sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm; fi
+          ls -l /dev/kvm || true
+      - name: Download Ubuntu noble mini ISO (~100 MB)
+        run: curl -fsSL -o /tmp/mini.iso https://cdimage.ubuntu.com/ubuntu-mini-iso/noble/daily-live/current/noble-mini-iso-amd64.iso && ls -l /tmp/mini.iso
+      - name: Compile tests
+        run: ./gradlew --no-daemon -q :app:compileDebugUnitTestKotlin
+      - name: Boot (Secure Boot off)
+        run: tools/netboot-qemu.sh /tmp/mini.iso /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_VARS_4M.fd /tmp/out-nosb 1800
+      - name: Boot (Secure Boot on, Microsoft keys)
+        continue-on-error: true
+        run: tools/netboot-qemu.sh /tmp/mini.iso /usr/share/OVMF/OVMF_CODE_4M.secboot.fd /usr/share/OVMF/OVMF_VARS_4M.ms.fd /tmp/out-sb 1800
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: netboot-qemu-logs
+          path: |
+            /tmp/out-*/serve.log
+            /tmp/out-*/serial.log
+          retention-days: 1
