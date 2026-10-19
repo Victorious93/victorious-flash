@@ -42,8 +42,9 @@ class MainActivity : ComponentActivity() {
             .putExtra(GadgetService.EXTRA_PATH, path).putExtra(GadgetService.EXTRA_CDROM, cdrom))
     }
 
-    fun serve(path: String) {
-        startForegroundService(Intent(this, ServeService::class.java).setAction(ServeService.ACTION_START).putExtra(ServeService.EXTRA_PATH, path))
+    fun serve(path: String, officialUrl: String?) {
+        startForegroundService(Intent(this, ServeService::class.java).setAction(ServeService.ACTION_START).putExtra(ServeService.EXTRA_PATH, path)
+            .putExtra(ServeService.EXTRA_OFFICIAL_URL, officialUrl))
     }
 
     fun stopServe() { startService(Intent(this, ServeService::class.java).setAction(ServeService.ACTION_STOP)) }
@@ -175,12 +176,18 @@ private fun NoRootCards(ui: UiState, srv: ServeService.State, act: MainActivity)
         Step(3, "Come back here and press Start server. The app shows the exact URL to type.")
         val ready = ui.verified && ui.image.file != null
         if (!srv.running) {
-            Button(onClick = { ui.image.file?.let { act.serve(it.path) } }, enabled = ready) { Text("Start server") }
+            Button(onClick = { ui.image.file?.let { act.serve(it.path, ui.selected?.takeIf { ui.expectedSource != "entered by you" }?.isoUrl) } }, enabled = ready) { Text("Start server") }
             if (!ready) Text("Verify an image in step 2 first.", fontSize = 13.sp)
         } else {
-            Text("SERVING (read-only). Type this URL in the PC firmware:", color = Electric, fontWeight = FontWeight.Bold)
+            Text("SERVING (read-only). Type ONE of these URLs in the PC firmware:", color = Electric, fontWeight = FontWeight.Bold)
+            if (srv.efiUrls.isNotEmpty()) {
+                Text("A) Boot loader URL (.efi). Lighter; required for Dell. Recommended:", fontWeight = FontWeight.Bold)
+                srv.efiUrls.forEach { SelectionContainer { Text(it, color = Electric, fontWeight = FontWeight.Black, fontSize = 18.sp) } }
+                Text(if (srv.officialOffered) "The PC menu offers: ISO from this phone (offline), or ISO from releases.ubuntu.com (uses the phone's mobile data). Both load the whole ISO into PC RAM." else "The PC menu loads the ISO from this phone into PC RAM (offline).", fontSize = 12.sp)
+            } else if (srv.efiProblem.isNotEmpty()) Text(srv.efiProblem, fontSize = 12.sp)
+            Text("B) Whole-ISO URL (firmware loads the ISO as a RAM disk):", fontWeight = FontWeight.Bold)
             srv.urls.forEach { (a, url) ->
-                SelectionContainer { Text(url, color = Electric, fontWeight = FontWeight.Black, fontSize = 20.sp) }
+                SelectionContainer { Text(url, color = Electric, fontWeight = FontWeight.Black, fontSize = 18.sp) }
                 Text("via ${a.iface} (" + when (a.kind) { com.victorious.flash.android.netboot.LocalAddr.Kind.USB_TETHER -> "USB tethering"; com.victorious.flash.android.netboot.LocalAddr.Kind.HOTSPOT -> "Wi-Fi hotspot"; else -> "other network" } + ")", fontSize = 12.sp)
             }
             Text("Sent: ${srv.bytesServed shr 20} MiB", fontSize = 13.sp)
@@ -193,16 +200,25 @@ private fun NoRootCards(ui: UiState, srv: ServeService.State, act: MainActivity)
         Step(1, "Power on and enter firmware setup (usually F2, F10, F1, Del or Esc).")
         Step(2, "Make sure Boot mode is UEFI. Enable \"Network stack\" / \"IPv4 HTTP support\" / \"HTTP Boot\".")
         Step(3, "Find \"HTTP Boot Configuration\" (often under Device Manager / Network). If it lists a USB network device (the phone), select it. If no device appears, this PC can't use the phone's USB network — stop here.")
-        Step(4, "Set IPv4 and enter the Boot URI exactly as shown above (http://…/ubuntu.iso). Save.")
+        Step(4, "Set IPv4 and enter Boot URI A (…/boot/bootx64.efi) exactly as shown above. If that fails and your firmware boots ISO files, try URL B (…/ubuntu.iso). Save.")
         Step(5, "Save & exit, then pick the new \"UEFI HTTP\" entry from the boot menu (F12/F9/F11/Esc).")
-        Step(6, "The firmware downloads the whole image into RAM (several minutes over USB) and boots it. When Ubuntu's menu appears, choose Try or Install.")
+        Step(6, "With URL A, a GRUB menu appears in seconds, then Ubuntu downloads the ISO into RAM (minutes). With URL B, the firmware downloads the whole ISO first. Then choose Try or Install.")
+    }
+    Card("Dell PCs (BIOS \"HTTPs Boot\")") {
+        Step(1, "Press F2 at the Dell logo. Under Connection (or Integrated Devices), enable \"UEFI Network Stack\".")
+        Step(2, "Open \"HTTP(s) Boot\", enable it, choose Manual Mode.")
+        Step(3, "Enter Boot URL A exactly (it must end in .efi): http://…/boot/bootx64.efi. Dell shows no error for a bad URL, so check every character.")
+        Step(4, "Apply, exit, press F12 and choose \"UEFI HTTPs Boot\". If Dell asks for a CA certificate, that only applies to https:// URLs.")
+        Step(5, "If the phone isn't listed as a network device, or Dell says \"Failed to find IP address\", this Dell can't use the phone's USB network. Use Rooted mode or a USB stick.")
     }
     Card("Compatibility — honest notes") {
         Text("Works only if ALL of these are true:", fontWeight = FontWeight.Bold)
         Text("• PC firmware supports UEFI HTTP Boot with a manual URL (UEFI 2.5+; common on PCs from ~2017 on, but often hidden or missing on consumer boards).")
         Text("• The firmware has a driver for the phone's USB network (RNDIS on older Android, NCM on newer). Most firmwares only drive built-in Ethernet or specific USB-Ethernet dongles. This is the most common failure.")
         Text("• Plain http:// is allowed. Some firmwares are HTTPS-only (e.g. recent ThinkPad custom HTTPS boot).")
-        Text("• The URL may point to an .iso. Dell client BIOS Manual Mode documents only .efi URLs.")
+        Text("• Dell client BIOS Manual Mode accepts only .efi URLs: use URL A. URL B (.iso) needs firmware with RAM-disk HTTP boot.")
+        Text("• URL A boots Ubuntu's own Microsoft-signed shim and GRUB, so Secure Boot can stay on, BUT only if the firmware trusts the \"Microsoft 3rd-party UEFI CA\". Some PCs (Secured-core, some Lenovo/Dell) ship with it off. Enable it in the Secure Boot settings, or turn Secure Boot off temporarily.")
+        Text("• After GRUB, Ubuntu's own kernel must bring up the phone's USB network (ip=dhcp) to download the ISO. Not yet confirmed for every phone.")
         Text("• The PC has enough RAM: the whole ISO is held in memory. Ubuntu Server (~3.2 GB) needs roughly 6 GB+, Ubuntu Desktop (~6 GB) roughly 12–16 GB+. Too little RAM fails with an out-of-resources error.")
         Text("• Secure Boot may still apply: Ubuntu's ISO is signed, but firmware policy varies.")
         Text("If it doesn't work: use Rooted mode (if your phone is rooted) or a USB stick. This mode has not been confirmed on real PCs yet.", color = Electric)

@@ -54,3 +54,19 @@ allowed, a firmware driver for the phone's USB network (RNDIS/NCM — the usual 
 (Dell client BIOS documents only `.efi`), and enough RAM to hold the whole ISO. **Not yet confirmed on real
 hardware.** The app auto-detects `su` (without invoking it) and defaults to Rooted mode when present; rooted
 mode is unchanged.
+
+### Lighter `.efi` boot path (for Dell-style firmwares that only accept `.efi` URLs)
+
+When the verified file is an Ubuntu ISO, `netboot/Iso9660.kt` (pure Kotlin, Rock Ridge aware) locates
+`EFI/boot/{bootx64,grubx64,mmx64}.efi` and `casper/{vmlinuz,initrd}` inside it and the server streams them
+directly from the ISO (no copy) at `/boot/bootx64.efi`, `/boot/grubx64.efi`, `/boot/mmx64.efi`,
+`/casper/vmlinuz`, `/casper/initrd`. A grub.cfg is generated per request (with the IP:port the PC
+connected to) at `/grub/grub.cfg` and `/boot/grub/grub.cfg` (+ `x86_64-efi/` variants), booting
+`linux /casper/vmlinuz ip=dhcp iso-url=http://<phone>:8080/ubuntu.iso cloud-config-url=/dev/null ---`.
+If the hash came from the catalog and its URL is `https://releases.ubuntu.com|cdimage.ubuntu.com/...iso`, a
+second entry downloads from Ubuntu instead (needs mobile data through tethering). Either way casper loads
+the whole ISO into PC RAM. The PC URL is `http://<phone>:8080/boot/bootx64.efi`.
+
+Verified: extraction byte-identical to pycdlib on Ubuntu's real `noble-mini-iso-amd64.iso`
+(`VFLASH_REAL_ISO=/path/to.iso ./gradlew :app:testDebugUnitTest --tests '*RealIsoTest*'`).
+Not verified: anything on real firmware (no QEMU/OVMF run either).
