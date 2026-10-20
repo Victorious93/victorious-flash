@@ -100,7 +100,7 @@ private fun DangerScreen(info: OtgInfo, image: String, onCancel: () -> Unit, onC
 
 /** The red full-screen danger confirm. The user must tick the box AND type [ERASE_WORD]. Shared by local and fleet-requested actions. */
 @Composable
-fun RedConfirmScreen(headline: String, body: String, tickLabel: String, confirmLabel: String, onCancel: () -> Unit, onConfirm: () -> Unit, extra: String = "") {
+fun RedConfirmScreen(headline: String, body: String, tickLabel: String, confirmLabel: String, onCancel: () -> Unit, extra: String = "", onConfirm: () -> Unit) {
     var typed by remember { mutableStateOf("") }
     var ticked by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
