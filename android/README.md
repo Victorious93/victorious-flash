@@ -81,3 +81,36 @@ the whole ISO into PC RAM. The PC URL is `http://<phone>:8080/boot/bootx64.efi`.
 Verified: extraction byte-identical to pycdlib on Ubuntu's real `noble-mini-iso-amd64.iso`
 (`VFLASH_REAL_ISO=/path/to.iso ./gradlew :app:testDebugUnitTest --tests '*RealIsoTest*'`).
 Not verified: anything on real firmware (no QEMU/OVMF run either).
+
+## Write to USB stick over OTG (no root)
+
+Third mode, like BootForge / Etcher: plug a USB flash drive into the phone through an OTG adapter and the app
+writes the verified ISO/IMG to it byte for byte (raw, dd-style). The stick can then boot a PC.
+
+How it works
+- Android USB Host API (`UsbManager`, device filter for class 8 / subclass 6 / protocol 0x50, runtime permission
+  request). Only mass-storage devices attached to this phone's USB port can ever be targets.
+- A small in-app USB Mass Storage Bulk-Only Transport + SCSI layer (`otg/Scsi.kt`, `otg/ScsiBlockDevice.kt`):
+  INQUIRY, TEST UNIT READY, REQUEST SENSE, READ CAPACITY(10/16), READ(10), WRITE(10), SYNCHRONIZE CACHE(10).
+  No third-party library: the raw-block part of libaums (Apache-2.0) is small, and owning ~250 lines keeps the
+  dependency surface, Android-version quirks and error handling under our control.
+- Flow: pick + hash the image (step 2, must match the catalog's or your SHA-256) → pick the stick (vendor/product and
+  capacity shown; a stick smaller than the image is refused) → full-screen red DANGER screen naming the stick and
+  its capacity; you must tick the box AND type `ERASE` → foreground service re-hashes the image (blocks on
+  mismatch), checks the stick is the same size you confirmed, writes 1 MiB aligned chunks (last block zero-padded)
+  with progress, speed and ETA, issues SYNCHRONIZE CACHE, then reads the whole written range back and compares its
+  SHA-256 with the source. Only a match shows "Write verified". Writing never starts automatically.
+- Unplug, stalls, SCSI errors (with sense data, e.g. write-protected) and cancel are reported clearly; an
+  interrupted stick is left incomplete and must be rewritten.
+
+Requirements
+- A phone with USB host / OTG support (most Android phones since ~2014; some budget models lack it).
+- An OTG adapter or USB-C stick, and a phone that can power the stick (some phones cannot power hungry drives;
+  use a powered hub then). Use a raw USB mass-storage flash drive, not an SD reader with multiple LUNs (LUN 0 only).
+
+Limits
+- Raw images only (.iso/.img). Hybrid ISOs (Ubuntu, Fedora, Debian…) boot; Windows ISOs written raw do not.
+- Block sizes 512/1024/2048/4096; images above 2 TiB not supported (READ/WRITE(10)).
+- Speed is bounded by the phone's USB stack (often 5–30 MB/s); read-back verify roughly doubles the time.
+- Not yet tested on real hardware: the BOT/SCSI layer is tested only against an in-memory simulated stick and
+  in-memory/file-backed block devices in unit tests.
