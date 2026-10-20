@@ -324,7 +324,7 @@ Built-in chapters:
 3. **Only if you want remote writes**, add a polkit rule that authorises `com.victorious.flash` for that user.
 
 ### 5.3 Remote control is OFF by default
-On Android, the **Allow fleet remote control** switch is off and no controller is pinned until you change that (5.5). On desktop, nothing is reachable remotely until you complete step 2. Remote **writing** stays impossible until you also complete step 3. On desktop there is no background listener: the bridge only runs when an authorised SSH key starts it. On Android the Messenger service can be bound by any app, but it refuses everything unless the switch is on and the caller matches a pin.
+On Android, the **Allow fleet remote control** switch is off until you turn it on. Only the preloaded DroidCommand debug-cert pin is present (5.5). On desktop, nothing is reachable remotely until you complete step 2. Remote **writing** stays impossible until you also complete step 3. On desktop there is no background listener: the bridge only runs when an authorised SSH key starts it. On Android the Messenger service can be bound by any app, but it refuses everything unless the switch is on and the caller matches a pin.
 
 ### 5.4 Safety gates around flashing
 These apply to the GUI, the bridge, and Android OTG.
@@ -341,6 +341,8 @@ These apply to the GUI, the bridge, and Android OTG.
 **Binding (EXTERNAL_NODE):** an exported Messenger service, action `com.victorious.flash.android.FLEET_BRIDGE`. Send a `Message` with `what=1`, `data["json"]` = the request and `replyTo` set. The reply has `what=2` and `data["json"]` = the response.
 
 **Who may call:** only an app whose package **and** signing-certificate SHA-256 are pinned in the settings card. The phone gets these from Android itself (the caller's UID, then the package manager's signing info). Nothing inside a request (no envelope field, no `trigger.*`) can authorise it. A pin with an empty certificate is inactive.
+
+**Preloaded pin:** the app ships with one controller already pinned, shown as **DroidCommand controller (debug cert)**: package `ai.droidcommand.app`, certificate SHA-256 `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D`. This is DroidCommand's **debug** signing certificate, a stand-in. It will be replaced with the release certificate once that exists. The preloaded pin does **not** turn anything on: **Allow fleet remote control** stays off until you switch it on, and wipes and disk mode still need you to confirm ERASE on the phone. You can remove the pin with **Remove**. It is added only once, on first launch, so it will not come back after you remove it.
 
 **Request envelope (protocol 1.1, flat JSON):** `op` (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`), `requestId`, `targetNodeRef` (this phone's `vfa-…` node id, shown in the card), `actionRef`, `params`, `nonce` (128-bit: 32 hex chars or base64 of 16 bytes), `timestampMs`, `ttlMs` (default 120000, max 300000), `destructive` (advisory only), `trigger` (informational only). `macro.step` adds `macroId`, `stepIndex`, `onError` (`abort`/`continue`). `macro.run` adds `macroId`, `steps` (each `{actionRef, params, onError}`, up to 32), `dryRun`.
 

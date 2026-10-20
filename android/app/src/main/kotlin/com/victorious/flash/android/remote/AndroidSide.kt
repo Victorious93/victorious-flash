@@ -21,15 +21,23 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import android.content.SharedPreferences
+
+private class SharedPrefsKv(private val p: SharedPreferences) : Kv {
+    override fun getString(k: String) = p.getString(k, null)
+    override fun putString(k: String, v: String) { p.edit().putString(k, v).apply() }
+    override fun getBoolean(k: String, d: Boolean) = p.getBoolean(k, d)
+    override fun putBoolean(k: String, v: Boolean) { p.edit().putBoolean(k, v).apply() }
+}
 
 /** Persistent switch (default OFF) and pinned-controller list. */
 class RemoteSettingsStore(ctx: Context) : RemoteSettings {
-    private val p = ctx.applicationContext.getSharedPreferences("fleet_remote", Context.MODE_PRIVATE)
-    override val enabled get() = p.getBoolean("enabled", false)
-    override val controllers get() = PinnedController.listFromJson(p.getString("controllers", "[]"))
-    fun setEnabled(v: Boolean) { p.edit().putBoolean("enabled", v).apply(); changed.value++ }
-    fun setControllers(l: List<PinnedController>) { p.edit().putString("controllers", PinnedController.listToJson(l)).apply(); changed.value++ }
-    val nodeRef: String get() = p.getString("nodeRef", null) ?: ("vfa-" + UUID.randomUUID().toString().take(13)).also { p.edit().putString("nodeRef", it).apply() }
+    private val core = PinStore(SharedPrefsKv(ctx.applicationContext.getSharedPreferences("fleet_remote", Context.MODE_PRIVATE)))
+    override val enabled get() = core.enabled
+    override val controllers get() = core.controllers
+    fun setEnabled(v: Boolean) { core.setEnabled(v); changed.value++ }
+    fun setControllers(l: List<PinnedController>) { core.setControllers(l); changed.value++ }
+    val nodeRef: String get() = core.kv.getString("nodeRef") ?: ("vfa-" + UUID.randomUUID().toString().take(13)).also { core.kv.putString("nodeRef", it) }
     companion object { val changed = MutableStateFlow(0) }
 }
 

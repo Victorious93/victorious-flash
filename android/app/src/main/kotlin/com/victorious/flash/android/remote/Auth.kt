@@ -39,3 +39,39 @@ object Authorizer {
         throw RemoteError(ErrorCode.UNAUTHORIZED, "caller is not an allow-listed controller")
     }
 }
+
+/** Minimal key-value storage so the pin store is unit-testable without Android. */
+interface Kv {
+    fun getString(k: String): String?
+    fun putString(k: String, v: String)
+    fun getBoolean(k: String, d: Boolean): Boolean
+    fun putBoolean(k: String, v: Boolean)
+}
+
+/** Controllers that ship pre-pinned. Pinning does NOT enable remote control: the switch stays off by default. */
+object DefaultPins {
+    const val DROIDCOMMAND_PACKAGE = "ai.droidcommand.app"
+    /** DroidCommand debug signing cert. Replace with the release cert once it exists. */
+    val DROIDCOMMAND_DEBUG_CERT = PinnedController.normalizeCert("88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D")!!
+    const val DROIDCOMMAND_LABEL = "DroidCommand controller (debug cert)"
+    val all = listOf(PinnedController(DROIDCOMMAND_PACKAGE, DROIDCOMMAND_DEBUG_CERT))
+    fun labelFor(p: PinnedController): String? =
+        if (p.packageName == DROIDCOMMAND_PACKAGE && p.normalizedCert == DROIDCOMMAND_DEBUG_CERT) DROIDCOMMAND_LABEL else null
+}
+
+/** Switch (default OFF) + pins. Default pins are seeded exactly once; a user removal is never undone. */
+class PinStore(val kv: Kv) : RemoteSettings {
+    init {
+        if (!kv.getBoolean(SEEDED, false)) {
+            val cur = PinnedController.listFromJson(kv.getString(CONTROLLERS))
+            val add = DefaultPins.all.filter { d -> cur.none { it.packageName == d.packageName && it.normalizedCert == d.normalizedCert } }
+            kv.putString(CONTROLLERS, PinnedController.listToJson(cur + add))
+            kv.putBoolean(SEEDED, true)
+        }
+    }
+    override val enabled get() = kv.getBoolean(ENABLED, false)
+    override val controllers get() = PinnedController.listFromJson(kv.getString(CONTROLLERS))
+    fun setEnabled(v: Boolean) = kv.putBoolean(ENABLED, v)
+    fun setControllers(l: List<PinnedController>) = kv.putString(CONTROLLERS, PinnedController.listToJson(l))
+    companion object { const val ENABLED = "enabled"; const val CONTROLLERS = "controllers"; const val SEEDED = "defaultPinsSeeded_v1" }
+}
