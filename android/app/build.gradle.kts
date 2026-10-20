@@ -16,7 +16,20 @@ android {
         versionName = "0.1.0-p1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    // Fixed, committed, NON-SECRET debug key (fleet standard) so every machine and CI produce
+    // debug APKs with the same signature and can upgrade each other in place. See README "Signing".
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

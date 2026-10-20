@@ -82,8 +82,8 @@ class IsoHttpServer(
         // keep-alive loop: firmware HTTP stacks often reuse the connection
         while (true) {
             val req = readRequest(input) ?: return
-            log("${sock.inetAddress.hostAddress} ${req.method} ${req.target} ${req.headers["range"] ?: ""}")
-            val keep = respond(req, out, "${sock.localAddress.hostAddress}:${sock.localPort}")
+            log("${sock.inetAddress.hostAddress} -> :${sock.localPort} ${req.method} ${req.target} host=${req.headers["host"] ?: "-"} ua=${req.headers["user-agent"] ?: "-"} ${req.headers["range"] ?: ""}")
+            val keep = respond(req, out, hostPortFor(req.headers["host"], sock.localAddress.hostAddress!!, sock.localPort))
             out.flush()
             if (!keep) return
         }
@@ -122,14 +122,16 @@ class IsoHttpServer(
     /** Returns whether the connection may be kept alive. */
     private fun respond(req: Request, out: OutputStream, hostPort: String): Boolean {
         val keep = !req.headers["connection"].equals("close", ignoreCase = true)
-        if (req.method != "GET" && req.method != "HEAD") return simple(out, 405, "Method Not Allowed", false, "Allow: GET, HEAD\r\n")
-        val path = req.target.substringBefore('?')
-        val res = routes[path] ?: return simple(out, 404, "Not Found", keep)
+        if (req.method != "GET" && req.method != "HEAD") return simple(out, 405, "Method Not Allowed", false, "Allow: GET, HEAD\r\n", head = false)
+        // shim builds the next-stage URL as "<dir>/" + "\\grubx64.efi" -> "/boot//grubx64.efi"
+        // (seen in the QEMU/OVMF run), so collapse repeated slashes before the exact-match lookup.
+        val path = req.target.substringBefore('?').replace(Regex("/{2,}"), "/")
+        val res = routes[path] ?: return simple(out, 404, "Not Found", keep, head = req.method == "HEAD")
         val generated = (res as? Resource.Generated)?.body?.invoke(hostPort)
         val len = generated?.size?.toLong() ?: (res as Resource.Slice).length
         val type = (res as? Resource.Generated)?.contentType ?: (res as Resource.Slice).contentType
         val range = req.headers["range"]?.let { parseRange(it, len) }
-        if (range == RangeResult.Unsatisfiable) return simple(out, 416, "Range Not Satisfiable", keep, "Content-Range: bytes */$len\r\n")
+        if (range == RangeResult.Unsatisfiable) return simple(out, 416, "Range Not Satisfiable", keep, "Content-Range: bytes */$len\r\n", head = req.method == "HEAD")
         val (start, end) = (range as? RangeResult.Ok)?.let { it.start to it.end } ?: (0L to len - 1)
         val n = if (len == 0L) 0 else end - start + 1
         val status = if (range is RangeResult.Ok) "206 Partial Content" else "200 OK"
@@ -160,8 +162,9 @@ class IsoHttpServer(
         return keep
     }
 
-    private fun simple(out: OutputStream, code: Int, msg: String, keep: Boolean, extra: String = ""): Boolean {
-        val body = "$code $msg\n".toByteArray()
+    /** Error/short response. A HEAD reply must carry no body, or a keep-alive client (GRUB) misreads the next response. */
+    private fun simple(out: OutputStream, code: Int, msg: String, keep: Boolean, extra: String = "", head: Boolean = false): Boolean {
+        val body = if (head) ByteArray(0) else "$code $msg\n".toByteArray()
         out.write(("HTTP/1.1 $code $msg\r\nContent-Type: text/plain\r\nContent-Length: ${body.size}\r\n$extra" +
             (if (keep) "Connection: keep-alive\r\n" else "Connection: close\r\n") + "\r\n").toByteArray(Charsets.US_ASCII))
         out.write(body)
@@ -174,6 +177,16 @@ class IsoHttpServer(
     }
 
     companion object {
+        /**
+         * Address the client used to reach us, for URLs we generate (grub.cfg iso-url). Prefer the IPv4
+         * from the Host header (correct behind NAT, e.g. QEMU user-net), always with the real listening
+         * port (clients may omit it). Falls back to the socket's local address.
+         */
+        fun hostPortFor(hostHeader: String?, localIp: String, localPort: Int): String {
+            val ip = hostHeader?.trim()?.substringBefore(':')?.takeIf { h -> Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(h) } ?: localIp
+            return "$ip:$localPort"
+        }
+
         /** EDK II HTTP Boot picks RAM-disk type from Content-Type (or extension). */
         fun contentType(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
             "iso" -> "application/vnd.efi.iso"

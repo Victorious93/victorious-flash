@@ -37,6 +37,17 @@ cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 Needs the Android SDK (platform 36, build-tools 36.0.0) and JDK 17+. CI: `.github/workflows/android.yml`.
 
+## Signing
+
+Debug builds (local and CI) are signed with the committed key `app/debug.keystore`
+(alias `androiddebugkey`, store/key password `android`, `CN=Victorious Flash Debug`, RSA 2048).
+This is a **NON-SECRET debug key**: it is public on purpose so every machine and CI produce
+debug APKs with the same signature (installs upgrade in place instead of failing with a
+signature mismatch). Never use it for anything you publish.
+
+Release signing is separate and is **not** in this repo: no release keystore or release
+credentials are committed, and none must ever be.
+
 ## Not verified yet
 Real rooted devices (configfs and legacy kernels), real PC boots (UEFI/legacy, disk vs CD-ROM), and
 vendor USB HALs that may reset the gadget behind the app's back. That is plan phase P6.
