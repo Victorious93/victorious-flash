@@ -24,6 +24,8 @@ jobs:
       - name: Build AppImage + .deb
         run: npx tauri build --bundles appimage,deb
       - uses: actions/upload-artifact@v4
+        # Bundles are built and tested above; a storage-quota failure here
+        # shouldn't fail the build.
         continue-on-error: true
         with:
           name: victorious-flash-linux
