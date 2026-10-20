@@ -17,6 +17,8 @@ import com.victorious.flash.android.netboot.RootHint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -56,6 +58,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<UiState> = _ui
 
     init {
+        // Publish the verified image (only when the hash matches) so fleet actions can use it, and nothing else.
+        viewModelScope.launch {
+            ui.map { u -> Triple(u.image.file.takeIf { u.verified }, u.image.sha256.takeIf { u.verified }, u.image.displayName) }.distinctUntilChanged()
+                .collect { (f, sha, name) -> com.victorious.flash.android.remote.VerifiedImageStore.save(app, f, sha, name) }
+        }
         // Auto-detect: if an su binary exists, default to rooted mode and run the full probe (may show the
         // superuser prompt). Otherwise default to No-root. The user can switch modes either way.
         val su = RootHint.suBinaryPresent()
