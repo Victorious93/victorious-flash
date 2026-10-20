@@ -92,26 +92,35 @@ fun OtgCards(ui: UiState, vm: OtgViewModel = viewModel()) {
 }
 
 @Composable
-private fun DangerScreen(info: OtgInfo, image: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
+private fun DangerScreen(info: OtgInfo, image: String, onCancel: () -> Unit, onConfirm: () -> Unit) = RedConfirmScreen(
+    headline = "EVERYTHING on ${info.display} WILL BE ERASED.",
+    body = "All files and partitions on this USB stick are overwritten with $image. This cannot be undone.",
+    tickLabel = "I understand everything on this stick will be destroyed",
+    confirmLabel = "ERASE AND WRITE", onCancel = onCancel, onConfirm = onConfirm)
+
+/** The red full-screen danger confirm. The user must tick the box AND type [ERASE_WORD]. Shared by local and fleet-requested actions. */
+@Composable
+fun RedConfirmScreen(headline: String, body: String, tickLabel: String, confirmLabel: String, onCancel: () -> Unit, onConfirm: () -> Unit, extra: String = "") {
     var typed by remember { mutableStateOf("") }
     var ticked by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(Color(0xFFB00020)).verticalScroll(rememberScrollState()).padding(24.dp)) {
             Text("⚠ DANGER", color = Color.White, fontWeight = FontWeight.Black, fontSize = 34.sp)
+            if (extra.isNotEmpty()) { Spacer(Modifier.height(8.dp)); Text(extra, color = Color.White, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.height(12.dp))
-            Text("EVERYTHING on ${info.display} WILL BE ERASED.", color = Color.White, fontWeight = FontWeight.Black, fontSize = 22.sp)
+            Text(headline, color = Color.White, fontWeight = FontWeight.Black, fontSize = 22.sp)
             Spacer(Modifier.height(8.dp))
-            Text("All files and partitions on this USB stick are overwritten with $image. This cannot be undone.", color = Color.White)
+            Text(body, color = Color.White)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth().selectable(ticked) { ticked = !ticked }, verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(ticked, { ticked = it }, colors = CheckboxDefaults.colors(checkedColor = Color.White, checkmarkColor = Color(0xFFB00020), uncheckedColor = Color.White))
-                Text("I understand everything on this stick will be destroyed", color = Color.White)
+                Text(tickLabel, color = Color.White)
             }
             OutlinedTextField(typed, { typed = it }, label = { Text("Type $ERASE_WORD to confirm", color = Color.White) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color.White, unfocusedBorderColor = Color.White))
             Spacer(Modifier.height(20.dp))
             Button(onClick = onConfirm, enabled = otgConfirmOk(typed, ticked), modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFFB00020))) { Text("ERASE AND WRITE", fontWeight = FontWeight.Black) }
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFFB00020))) { Text(confirmLabel, fontWeight = FontWeight.Black) }
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = Color.White) }
         }
     }
