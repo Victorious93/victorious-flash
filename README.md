@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="victorious-flash logo" width="200">
+</p>
+
 <p align="center"><img src="assets/logo-512.png" width="200" alt="Victorious Flash logo"></p>
 <h1 align="center">Victorious Flash</h1>
 <p align="center"><strong>Pick a Linux. Verify it. Flash it. Install it.</strong></p>
