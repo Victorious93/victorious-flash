@@ -229,7 +229,9 @@ For phones without root. **Nothing is erased.** The PC boots the installer into 
 
 ### 3.7 Write to a USB stick over OTG (no root) 🚧 Coming soon, in PR (`android/otg-usb-writer`)
 
-This mode is not merged. Here is what the branch does today.
+This mode is not merged yet; it stays 🚧 until it is. It has **not been tested on a real phone and stick yet** (only against simulated sticks in unit tests). Here is what the branch does today.
+
+**You need:** a phone with USB host (OTG) support, an OTG adapter (or a USB-C stick), and a phone that can power the stick. No root. The app talks to the stick directly with Android's USB Host API and its own small USB Mass Storage (Bulk-Only Transport + SCSI) layer; no third-party library.
 
 > ### 🛑 THIS ERASES THE WHOLE STICK
 > The stick plugged into the phone is overwritten byte for byte.
@@ -240,7 +242,8 @@ This mode is not merged. Here is what the branch does today.
 4. A full-screen **red DANGER** screen names the stick and its size. You must **tick the box AND type `ERASE`**. Writing never starts on its own.
 5. The app then:
    - re-hashes the image
-   - checks the stick's size has not changed
+   - blocks if the image's SHA-256 does not match the expected hash
+   - checks the stick's size has not changed since you confirmed
    - writes it, showing progress, speed and ETA
    - flushes the stick's cache
    - **reads the whole written range back and compares the SHA-256**
