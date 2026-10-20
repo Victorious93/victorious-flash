@@ -12,7 +12,6 @@ It only describes what the code does today. Each feature has one of these labels
 | Label | Meaning |
 |---|---|
 | ✅ **Available (main)** | Merged into `main`. |
-| 🧪 **Available (Android stack, not on main yet)** | Merged into the stacked Android branch `android/netboot-qemu-ci` (PRs #9–#11: QEMU check, fixed debug keystore, Gradle kill scoping) but not yet into `main`. (#8's `.efi` path is already on main.) |
 | 🚧 **Coming soon, in PR** | Being built on a branch. Not merged. |
 | 💤 **Planned, not yet available** | No code exists yet. |
 
@@ -75,12 +74,12 @@ VFLASH_HELPER=$PWD/target/debug/victorious-flash-helper npm run tauri dev
 
 [Screenshot: Desktop app home screen with the three modes, to be added]
 
-### 2.2 Android ✅ Available (main), parts 🧪
+### 2.2 Android ✅ Available (main)
 
 - Package `com.victorious.flash.android` (Kotlin and Jetpack Compose).
 - Install the debug APK built by CI (`.github/workflows/android.yml`), or build it yourself with `cd android && ./gradlew :app:assembleDebug`. You need the Android SDK 36 and JDK 17+.
 - To install, allow "Install unknown apps" for your browser or file manager, then open the APK.
-- 🧪 **Fixed debug signature (PR #10).** Debug APKs are signed with a committed, **non-secret** debug key, so newer debug builds install over older ones. That key is public on purpose. It is not a release key and must never be used for published builds. A release-signed build does not exist yet. 💤 **Planned, not yet available.**
+- ✅ **Fixed debug signature (PR #10, on main).** Debug APKs are signed with a committed, **non-secret** debug key, so newer debug builds install over older ones. That key is public on purpose. It is not a release key and must never be used for published builds. A release-signed build does not exist yet. 💤 **Planned, not yet available.**
 - **Root is optional.** The app checks whether `su` exists without running it, and picks Rooted mode by default if it finds it. Without root you get the no-root modes.
 
 [Screenshot: Android app first screen with the mode choice, to be added]
@@ -198,7 +197,7 @@ For phones without root. **Nothing is erased.** The PC boots the installer into 
 
 - Basic ISO serving is ✅ on main (PR #7).
 - The lighter `.efi` path (URL A) and the Dell HTTPs Boot steps are ✅ on main too (PR #8, included in main's #7 squash commit `a8bf108`).
-- The QEMU/OVMF check script is 🧪 in the Android stack (PRs #9, #11), not on main yet.
+- ✅ The QEMU/OVMF check script (`android/tools/netboot-qemu.sh`, PRs #9 and #11, which only kills its own Gradle processes) is on main via #14.
 
 **Steps:**
 1. Verify an image (3.2). Ubuntu is needed for the `.efi` path.
