@@ -87,7 +87,7 @@ VFLASH_HELPER=$PWD/target/debug/victorious-flash-helper npm run tauri dev
 ### 2.3 Pairing with the fleet controller
 
 - **Desktop:** pairing is manual, over SSH. No pairing screen exists. Follow the steps in [5.2](#52-setting-up-a-desktop-node-manual).
-- **Android:** 💤 **Planned, not yet available.** The Android app has no fleet bridge and no pairing.
+- **Android:** pin the controller app's package and signing-cert SHA-256 in **Fleet remote control** and turn the switch on. See [5.5](#55-android-fleet-remote-control-off-by-default).
 - **One-tap or QR pairing (any platform):** 💤 **Planned, not yet available.**
 
 ---
@@ -263,7 +263,10 @@ This mode is on main (PR #16). It has **not been tested on a real phone and stic
 ### 3.8 Fleet bridge
 
 - **Desktop:** ✅ Available (main). See section 5.
-- **Android:** 💤 **Planned, not yet available.**
+- **Android:** ✅ Available (main), not yet tested with a real controller. Off by default. See [5.5](#55-android-fleet-remote-control-off-by-default).
+  - Settings card **Fleet remote control** on the main screen: the **Allow fleet remote control** switch (default off) and a list of pinned controllers (package name + signing-certificate SHA-256).
+  - A controller app on the same phone binds to the app's Messenger service and sends JSON requests (protocol 1.1).
+  - Read-only status and netboot serve start/stop can run remotely. **Erasing a USB stick (OTG write) and switching USB to disk mode (rooted gadget expose) always need you to confirm on the phone** on the same red tick-and-type-`ERASE` screen. A remote request can never approve itself.
 
 ### 3.9 Install guide (desktop) ✅
 
@@ -292,6 +295,7 @@ Built-in chapters:
 |---|---|
 | `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` | To fetch checksum files, and to find the phone's tethering, hotspot or LAN IP for the boot server. |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS` | To keep the gadget, serve or write job running, with a visible notification and Stop button. |
+| `USE_FULL_SCREEN_INTENT` | So a fleet request for a destructive action can open the red confirm screen for you to approve or cancel. |
 | `WAKE_LOCK` | To stop the phone sleeping during a long serve or write. |
 | **Root (`su`)**, optional | Only for "phone as USB drive". Changing USB gadget settings in `/config/usb_gadget` or `/sys` requires root. The app only detects `su` on startup. It runs `su` when you use Rooted mode. |
 | USB device permission (OTG mode, ✅ Available (main), not yet tested on real hardware) | Android asks before the app may talk to a stick you plug in. Only mass-storage devices attached to the phone can be targets. |
@@ -320,7 +324,7 @@ Built-in chapters:
 3. **Only if you want remote writes**, add a polkit rule that authorises `com.victorious.flash` for that user.
 
 ### 5.3 Remote control is OFF by default
-Nothing is reachable remotely until you complete step 2. Remote **writing** stays impossible until you also complete step 3. There is no background listener: the bridge only runs when an authorised SSH key starts it.
+On Android, the **Allow fleet remote control** switch is off and no controller is pinned until you change that (5.5). On desktop, nothing is reachable remotely until you complete step 2. Remote **writing** stays impossible until you also complete step 3. On desktop there is no background listener: the bridge only runs when an authorised SSH key starts it. On Android the Messenger service can be bound by any app, but it refuses everything unless the switch is on and the caller matches a pin.
 
 ### 5.4 Safety gates around flashing
 These apply to the GUI, the bridge, and Android OTG.
@@ -330,6 +334,33 @@ These apply to the GUI, the bridge, and Android OTG.
 - **Root helper re-checks.** Writes go **only** through the pkexec helper, which validates the target again.
 - **Read-back verify** after every write.
 - Refused requests return `safety_refused` or `verify_failed`.
+
+### 5.5 Android fleet remote control (off by default)
+✅ Available (main), not yet tested with a real controller.
+
+**Binding (EXTERNAL_NODE):** an exported Messenger service, action `com.victorious.flash.android.FLEET_BRIDGE`. Send a `Message` with `what=1`, `data["json"]` = the request and `replyTo` set. The reply has `what=2` and `data["json"]` = the response.
+
+**Who may call:** only an app whose package **and** signing-certificate SHA-256 are pinned in the settings card. The phone gets these from Android itself (the caller's UID, then the package manager's signing info). Nothing inside a request (no envelope field, no `trigger.*`) can authorise it. A pin with an empty certificate is inactive.
+
+**Request envelope (protocol 1.1, flat JSON):** `op` (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`), `requestId`, `targetNodeRef` (this phone's `vfa-…` node id, shown in the card), `actionRef`, `params`, `nonce` (128-bit: 32 hex chars or base64 of 16 bytes), `timestampMs`, `ttlMs` (default 120000, max 300000), `destructive` (advisory only), `trigger` (informational only). `macro.step` adds `macroId`, `stepIndex`, `onError` (`abort`/`continue`). `macro.run` adds `macroId`, `steps` (each `{actionRef, params, onError}`, up to 32), `dryRun`.
+
+**Replay protection:** a request is refused as `expired` if now is later than `timestampMs + ttlMs`, or if the clocks differ by more than 120 s. A repeated nonce from the same controller within 10 minutes is refused as `replay_detected`.
+
+**Actions** (`capabilities.get` lists each with `kind`, `remoteAllowed`, `requiresConfirm`):
+
+| actionRef | kind | What it does |
+|---|---|---|
+| `status.get` | read | Verified image, netboot, gadget and OTG state, attached USB sticks |
+| `capabilities.get` | read | The list above |
+| `netboot.serve.start` / `netboot.serve.stop` | action | Starts or stops the no-root boot server with the phone's verified image |
+| `otg.write` (`params.deviceName`) | destructive | Asks you to erase that stick (plugged into the phone) and write the verified image |
+| `gadget.expose` (`params.cdrom`) | destructive | Asks you to switch USB to disk mode (rooted phones) |
+
+**Destructive actions** always answer `confirmation_required` and post a high-priority notification that opens the red danger screen. Nothing happens unless you tick the box and type `ERASE` on the phone. A request expires after 5 minutes. In a macro, a destructive step stops the macro. Only the image you verified in the app can be used, and only USB sticks attached to the phone can be targets. **The PC's internal disks are never touched.**
+
+**Errors:** `invalid_parameters`, `not_paired` (no complete pin), `not_found`, `internal`, `unauthorized`, `replay_detected`, `expired`, `external_control_disabled` (switch off), `confirmation_required`, `unsupported_op`, `capability_off` (e.g. no verified image, no root).
+
+**Not yet verified:** tested only with unit tests. No real controller app has called it yet.
 
 ---
 
