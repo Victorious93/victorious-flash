@@ -32,7 +32,7 @@ data class ImageState(
     val importing: Boolean = false,
 )
 
-enum class Mode { ROOTED, NO_ROOT }
+enum class Mode { ROOTED, NO_ROOT, OTG }
 
 data class UiState(
     val mode: Mode = Mode.NO_ROOT,
