@@ -12,7 +12,7 @@ It only describes what the code does today. Each feature has one of these labels
 | Label | Meaning |
 |---|---|
 | ✅ **Available (main)** | Merged into `main`. |
-| 🧪 **Available (Android stack, not on main yet)** | Merged into the stacked Android branches (PRs #8–#11, head `android/netboot-qemu-ci`) but not yet into `main`. |
+| 🧪 **Available (Android stack, not on main yet)** | Merged into the stacked Android branch `android/netboot-qemu-ci` (PRs #9–#11: QEMU check, fixed debug keystore, Gradle kill scoping) but not yet into `main`. (#8's `.efi` path is already on main.) |
 | 🚧 **Coming soon, in PR** | Being built on a branch. Not merged. |
 | 💤 **Planned, not yet available** | No code exists yet. |
 
@@ -192,12 +192,13 @@ Your rooted phone shows up to the PC as a **read-only** USB disk or CD-ROM that 
 [Screenshot: Gadget capability checklist, to be added]
 [Screenshot: Exposed image notification, to be added]
 
-### 3.6 No-root network boot over USB tethering (UEFI HTTP Boot) 🧪 experimental
+### 3.6 No-root network boot over USB tethering (UEFI HTTP Boot) ✅ Available (main), experimental
 
 For phones without root. **Nothing is erased.** The PC boots the installer into RAM.
 
 - Basic ISO serving is ✅ on main (PR #7).
-- The lighter `.efi` path, the Dell steps and the QEMU check script are 🧪 in the Android stack (PRs #8, #9, #11).
+- The lighter `.efi` path (URL A) and the Dell HTTPs Boot steps are ✅ on main too (PR #8, included in main's #7 squash commit `a8bf108`).
+- The QEMU/OVMF check script is 🧪 in the Android stack (PRs #9, #11), not on main yet.
 
 **Steps:**
 1. Verify an image (3.2). Ubuntu is needed for the `.efi` path.
