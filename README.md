@@ -1,6 +1,30 @@
+<!-- victorious-fleet-readme-refresh:start -->
 <p align="center">
-  <img src="assets/logo.png" alt="victorious-flash logo" width="200">
+  <img src="assets/logo.png" alt="Victorious Flash logo" width="200">
 </p>
+
+# Victorious Flash
+
+Desktop distro installer — pick a Linux distro, download its official ISO, and write it to USB.
+
+**Package id:** `com.victorious.flash.android`
+
+> **Package note:** From `android/app/build.gradle.kts`. Desktop-focused product (Android module id retained).
+
+**Status:** CI green (desktop) *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
+
+## Install / build
+
+See repo root and `android/` for the real build entrypoints (desktop + optional Android module). Prefer documented scripts/CI over invented steps. Unverified locally in this refresh.
+
+_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
+
+## Victorious fleet
+
+- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
+- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
+
+<!-- victorious-fleet-readme-refresh:end -->
 
 <p align="center"><img src="assets/logo-512.png" width="200" alt="Victorious Flash logo"></p>
 <h1 align="center">Victorious Flash</h1>
