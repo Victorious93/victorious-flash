@@ -57,7 +57,8 @@ class SimStick(val disk: MemBlockDevice, val vendor: String = "ACME", val produc
         require(b.int == Bot.CBW_SIGNATURE); tag = b.int; val dl = b.int; b.get(); b.get(); val cl = b.get().toInt()
         val cdb = ByteArray(cl).also { b.get(it) }
         val op = cdb[0].toInt() and 0xff; ops += op
-        fun lba() = Scsi.be32(cdb, 2); fun cnt() = ((cdb[7].toInt() and 0xff) shl 8) or (cdb[8].toInt() and 0xff)
+        fun lba() = Scsi.be32(cdb, 2)
+        fun cnt() = ((cdb[7].toInt() and 0xff) shl 8) or (cdb[8].toInt() and 0xff)
         when (op) {
             Scsi.INQUIRY -> { val d = ByteArray(36); d[1] = 0x80.toByte(); "%-8s%-16s%-4s".format(vendor, product, "1.00").toByteArray().copyInto(d, 8); pendingIn = d; csw = csw(0, 0) }
             Scsi.TEST_UNIT_READY -> csw = if (unitAttentionsLeft-- > 0) csw(1, 0) else csw(0, 0)

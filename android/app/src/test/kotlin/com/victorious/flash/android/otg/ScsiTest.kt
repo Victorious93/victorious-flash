@@ -62,7 +62,7 @@ class ScsiTest {
     @Test(expected = ScsiException::class) fun capacityRejectsOddBlockSize() { val d = ByteArray(8); Scsi.putBe32(d, 4, 520); Scsi.parseCapacity10(d) }
 
     @Test fun inquiryAndSense() {
-        val d = ByteArray(36); d[1] = 0x80.toByte(); "SanDisk Cruzer Blade     1.00".toByteArray().copyInto(d, 8)
+        val d = ByteArray(36); d[1] = 0x80.toByte(); "%-8s%-16s%-4s".format("SanDisk", "Cruzer Blade", "1.00").toByteArray().copyInto(d, 8)
         val i = Scsi.parseInquiry(d); assertEquals("SanDisk", i.vendor); assertEquals("Cruzer Blade", i.product); assertTrue(i.removable); assertEquals(0, i.deviceType)
         val s = ByteArray(18); s[0] = 0x70; s[2] = 7; s[12] = 0x27
         assertEquals(7, Scsi.parseSense(s)!!.key); assertTrue(Scsi.parseSense(s).toString().contains("write-protected"))
