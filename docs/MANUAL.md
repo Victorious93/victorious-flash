@@ -227,9 +227,9 @@ For phones without root. **Nothing is erased.** The PC boots the installer into 
 - The ISO extraction matches pycdlib byte for byte on a real Ubuntu ISO.
 - **Not yet confirmed on real PC hardware.**
 
-### 3.7 Write to a USB stick over OTG (no root) 🚧 Coming soon, in PR (`android/otg-usb-writer`)
+### 3.7 Write to a USB stick over OTG (no root) ✅ Available (main), not yet tested on real hardware
 
-This mode is not merged yet; it stays 🚧 until it is. It has **not been tested on a real phone and stick yet** (only against simulated sticks in unit tests). Here is what the branch does today.
+This mode is on main (PR #16). It has **not been tested on a real phone and stick yet** (only against simulated sticks in unit tests). Here is what it does.
 
 **You need:** a phone with USB host (OTG) support, an OTG adapter (or a USB-C stick), and a phone that can power the stick. No root. The app talks to the stick directly with Android's USB Host API and its own small USB Mass Storage (Bulk-Only Transport + SCSI) layer; no third-party library.
 
@@ -294,7 +294,7 @@ Built-in chapters:
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS` | To keep the gadget, serve or write job running, with a visible notification and Stop button. |
 | `WAKE_LOCK` | To stop the phone sleeping during a long serve or write. |
 | **Root (`su`)**, optional | Only for "phone as USB drive". Changing USB gadget settings in `/config/usb_gadget` or `/sys` requires root. The app only detects `su` on startup. It runs `su` when you use Rooted mode. |
-| USB device permission (OTG branch, 🚧) | Android asks before the app may talk to a stick you plug in. Only mass-storage devices attached to the phone can be targets. |
+| USB device permission (OTG mode, ✅ Available (main), not yet tested on real hardware) | Android asks before the app may talk to a stick you plug in. Only mass-storage devices attached to the phone can be targets. |
 | Files | Images are chosen with the system file picker (no storage permission) and copied into the app's private folder. |
 
 ---
@@ -367,7 +367,7 @@ Press the key repeatedly right after power-on.
 - **My stick isn't listed.** It may be over 2 TiB, read-only, or not reported as removable. Internal disks are hidden on purpose.
 - **Checksum mismatch.** Delete the file and download it again. Do not use a file that fails the check.
 - **The phone lost ADB, MTP or tethering.** That is expected while "phone as USB drive" is active. Tap Stop or Restore USB, or reboot the phone.
-- **Network boot shows no phone network device.** The firmware has no driver for the phone's USB network. Use Rooted mode, a stick, or (🚧) OTG.
+- **Network boot shows no phone network device.** The firmware has no driver for the phone's USB network. Use Rooted mode, a stick, or OTG (✅ Available (main), not yet tested on real hardware).
 - **"Out of resources" during network boot.** The PC does not have enough RAM for the ISO (see 3.6).
 - **ThinkPad refuses the URL.** The firmware is HTTPS-only. The app serves http only, so use a stick.
 - **The AppImage can't flash.** Install the `.deb` (it includes the helper) or set `VFLASH_HELPER`.
