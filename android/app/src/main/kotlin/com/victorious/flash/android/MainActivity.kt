@@ -159,6 +159,7 @@ private fun Screen(vm: MainViewModel) {
             }
             if (svc.message.isNotEmpty()) Text(svc.message)
         }
+        com.victorious.flash.android.remote.RemoteSettingsCard()
         if (ui.error.isNotEmpty()) Text(ui.error, color = Danger)
     }
 
