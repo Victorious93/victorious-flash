@@ -36,7 +36,7 @@ fun RemoteSettingsCard() {
         if (enabled && pins.none { it.isComplete }) Text("No controller pinned: every request is refused.", color = Electric, fontSize = 13.sp)
         pins.forEachIndexed { i, p ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${p.packageName}\n${p.certSha256.ifBlank { "(cert not set — inactive)" }}", Modifier.weight(1f), fontSize = 11.sp)
+                Text("${DefaultPins.labelFor(p)?.let { "$it\n" } ?: ""}${p.packageName}\n${p.certSha256.ifBlank { "(cert not set — inactive)" }}", Modifier.weight(1f), fontSize = 11.sp)
                 TextButton(onClick = { store.setControllers(pins.filterIndexed { j, _ -> j != i }) }) { Text("Remove") }
             }
         }
