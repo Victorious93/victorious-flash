@@ -1,0 +1,4 @@
+{"label": "1-plain-default-incremental", "exit": 0, "wall_s": 19.7, "target_dir_mb": 297, "sccache": {}}
+{"label": "2-plain-incremental-off", "exit": 0, "wall_s": 17.1, "target_dir_mb": 253, "sccache": {}}
+{"label": "3-sccache-cold", "exit": 0, "wall_s": 24.1, "target_dir_mb": 253, "sccache": {"hits": 0, "misses": 212, "compile_requests": 250, "requests_not_cacheable": 32, "non_cacheable_compilations": 0, "not_cached_reasons": {"missing input": 2, "crate-type": 29, "-": 1}}}
+{"label": "4-sccache-warm-fresh-target", "exit": 0, "wall_s": 14.8, "target_dir_mb": 253, "sccache": {"hits": 146, "misses": 66, "compile_requests": 250, "requests_not_cacheable": 32, "non_cacheable_compilations": 0, "not_cached_reasons": {"missing input": 2, "-": 1, "crate-type": 29}}}
