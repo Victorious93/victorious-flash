@@ -37,9 +37,9 @@ class MainActivity : ComponentActivity() {
         setContent { VictoriousTheme { Surface(Modifier.fillMaxSize(), color = Navy) { Screen(vm) } } }
     }
 
-    fun expose(path: String, cdrom: Boolean) {
+    fun expose(path: String, cdrom: Boolean, trustedSha256: String) {
         startForegroundService(Intent(this, GadgetService::class.java).setAction(GadgetService.ACTION_EXPOSE)
-            .putExtra(GadgetService.EXTRA_PATH, path).putExtra(GadgetService.EXTRA_CDROM, cdrom))
+            .putExtra(GadgetService.EXTRA_PATH, path).putExtra(GadgetService.EXTRA_CDROM, cdrom).putExtra(GadgetService.EXTRA_SHA, trustedSha256))
     }
 
     fun serve(path: String, officialUrl: String?) {
@@ -167,7 +167,7 @@ private fun Screen(vm: MainViewModel) {
         onDismissRequest = { confirm = false },
         title = { Text("Switch USB to disk mode?", color = Danger) },
         text = { Text(stringResource(R.string.warning_confirm)) },
-        confirmButton = { TextButton(onClick = { confirm = false; ui.image.file?.let { act.expose(it.path, ui.cdrom) } }) { Text("Expose", color = Danger) } },
+        confirmButton = { TextButton(onClick = { confirm = false; ui.image.file?.let { act.expose(it.path, ui.cdrom, ui.expectedSha.trim()) } }) { Text("Expose", color = Danger) } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
     )
 }

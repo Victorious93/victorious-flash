@@ -31,6 +31,18 @@ class EfiBootTest {
         assertFalse(EfiBoot.plan(f).usable)
     }
 
+    /** An archiso-style (VictorLinux/Arch) layout has /EFI/BOOT/BOOTx64.EFI and /arch/boot, but no casper kernel: the Ubuntu-only HTTP path must refuse it. */
+    @Test fun archisoStyleImageIsRefusedByTheUbuntuOnlyHttpPath() {
+        val f = tmp()
+        TestIso.build(f, TestIso.Dir("", null, listOf(
+            TestIso.Dir("EFI", null, listOf(TestIso.Dir("BOOT", null, listOf(TestIso.F("BOOTX64.EFI;1", "BOOTx64.EFI", ByteArray(8)))))),
+            TestIso.Dir("ARCH", "arch", listOf(TestIso.Dir("BOOT", "boot", listOf(TestIso.F("VMLINUZ;1", "vmlinuz-linux", ByteArray(8))))))))
+        )
+        val p = EfiBoot.plan(f)
+        assertFalse(p.usable)
+        assertTrue(p.missing.contains("/casper/vmlinuz"))
+    }
+
     @Test fun planFindsUbuntuBootFiles() {
         val f = tmp(); TestIso.ubuntuLike(f)
         val p = EfiBoot.plan(f)

@@ -14,6 +14,8 @@ import com.victorious.flash.android.MainActivity
 import com.victorious.flash.android.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import com.victorious.flash.android.image.ImageGuard
+import java.io.File
 import kotlin.concurrent.thread
 
 /** Foreground service that owns the exposed state. Stopping it (or the app's task being removed) restores USB. */
@@ -26,6 +28,7 @@ class GadgetService : Service() {
         const val ACTION_STOP = "com.victorious.flash.android.STOP"
         const val EXTRA_PATH = "path"
         const val EXTRA_CDROM = "cdrom"
+        const val EXTRA_SHA = "sha256"
         private const val CHANNEL = "gadget"
         private val _state = MutableStateFlow(State())
         val state: StateFlow<State> = _state
@@ -47,10 +50,17 @@ class GadgetService : Service() {
                 val path = intent.getStringExtra(EXTRA_PATH) ?: return stopNow("No image.")
                 val cdrom = intent.getBooleanExtra(EXTRA_CDROM, false)
                 val caps = capabilities ?: return stopNow("Run the capability check first.")
-                _state.value = State(busy = true, message = "Exposing…")
+                val sha = intent.getStringExtra(EXTRA_SHA) ?: return stopNow("No trusted checksum was supplied, so nothing was exposed.")
+                _state.value = State(busy = true, message = "Verifying image…")
                 thread {
+                    val file = File(path)
+                    // 1. The bytes about to be exposed must match the trusted SHA-256, checked NOW, before USB is touched.
+                    val v = ImageGuard.verify(file, sha) { d, t -> if (t > 0 && d % (256L shl 20) < (1 shl 20)) _state.value = State(busy = true, message = "Verifying image… ${100 * d / t}%") }
+                    if (v !is ImageGuard.Result.Ok) { _state.value = State(message = (v as ImageGuard.Result.Refused).reason); stopSelf(); return@thread }
+                    file.setReadOnly()   // best effort: nothing in this app writes to it again while exposed
+                    _state.value = State(busy = true, message = "Exposing…")
                     when (val r = controller.expose(caps, path, cdrom, listOf(imagesDir(this).path))) {
-                        is GadgetController.Outcome.Ok -> _state.value = State(exposed = true, message = r.message)
+                        is GadgetController.Outcome.Ok -> { _state.value = State(exposed = true, message = r.message); watch(file, v.snapshot) }
                         is GadgetController.Outcome.Failed -> { _state.value = State(message = r.message); stopSelf() }
                     }
                 }
@@ -60,14 +70,27 @@ class GadgetService : Service() {
         return START_NOT_STICKY
     }
 
+    /** While exposed the file must stay identical; if it changes, restore USB rather than serve a moving target. */
+    private fun watch(file: File, snap: ImageGuard.Snapshot) {
+        thread(isDaemon = true) {
+            while (_state.value.exposed) {
+                Thread.sleep(2000)
+                if (_state.value.exposed && !ImageGuard.unchanged(file, snap)) {
+                    restoreAndStop("The image file changed while it was exposed, so USB was restored. Verify the image again before exposing it.")
+                    return@thread
+                }
+            }
+        }
+    }
+
     private fun stopNow(msg: String): Int { _state.value = State(message = msg); stopSelf(); return START_NOT_STICKY }
 
-    private fun restoreAndStop() {
+    private fun restoreAndStop(reason: String? = null) {
         val backend = capabilities?.backend ?: GadgetBackend.CONFIGFS
         _state.value = _state.value.copy(busy = true, message = "Restoring USB…")
         thread {
             val r = controller.restore(backend)
-            _state.value = State(message = when (r) { is GadgetController.Outcome.Ok -> r.message; is GadgetController.Outcome.Failed -> r.message })
+            _state.value = State(message = reason ?: when (r) { is GadgetController.Outcome.Ok -> r.message; is GadgetController.Outcome.Failed -> r.message })
             stopSelf()
         }
     }

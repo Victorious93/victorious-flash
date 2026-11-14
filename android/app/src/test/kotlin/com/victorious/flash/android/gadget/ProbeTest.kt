@@ -57,4 +57,21 @@ class ProbeTest {
         assertNull(GadgetController.chooseTarget("G * \nU *\n"))
         assertNull(GadgetController.chooseTarget("G g\$(reboot) x\nC g\$(reboot) b.1\n"))
     }
+
+    @Test fun cdromSupportIsReportedNotAssumed() {
+        fun c(out: String) = GadgetProbe.parse(true, GadgetProbe.RawProbe("g1", "usb_f_mass_storage 1 0 - Live 0\n---\n---\n", "musb", "", "", out))
+        assertEquals(true, c("CDROM_OK\n").cdromSupported)
+        assertEquals(false, c("CDROM_NO").cdromSupported)
+        assertNull(c("CDROM_UNKNOWN").cdromSupported)
+        assertNull(c("").cdromSupported)
+        assertTrue(c("CDROM_NO").notes.any { it.contains("no CD-ROM mode") })
+        assertTrue("disk mode must stay usable without CD-ROM", c("CDROM_NO").gadgetModeUsable)
+    }
+
+    @Test fun rootAloneIsNotAVerdict() {
+        // root present, configfs present, but no UDC and no mass_storage function: not usable.
+        val c = GadgetProbe.parse(true, GadgetProbe.RawProbe("g1", "usb_f_fs 1 0\n---\nffs.adb\n---\n", "", "", ""))
+        assertTrue(c.rooted); assertFalse(c.gadgetModeUsable)
+        assertTrue(c.notes.any { it.contains("No USB Device Controller") })
+    }
 }

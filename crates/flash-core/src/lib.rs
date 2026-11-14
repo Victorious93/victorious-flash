@@ -5,3 +5,6 @@ pub mod checksum;
 pub mod devices;
 pub mod direct;
 pub mod image;
+pub mod writer;
+pub mod local;
+pub mod persist;

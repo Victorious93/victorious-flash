@@ -107,6 +107,22 @@ pub fn confirmation_matches(dev: &UsbDevice, typed: &str) -> bool {
     !t.is_empty() && (t == dev.name || t == dev.path)
 }
 
+/// Why a previously inspected target can no longer be trusted (None = identity unchanged).
+/// The GUI/bridge records the size it showed the owner; a different size at write time means the
+/// device was swapped or its capacity changed, so nothing may be written.
+pub fn identity_problem(expected_size: Option<u64>, now: &UsbDevice) -> Option<String> {
+    match expected_size {
+        Some(s) if s != now.size => Some(format!("the device now reports {} bytes but {s} bytes were confirmed; it was changed or replaced", now.size)),
+        _ => None,
+    }
+}
+
+/// True when the image file lives on (a filesystem mounted from) the target device. Writing would
+/// destroy the source, so it is refused before anything is unmounted.
+pub fn image_is_on_target(image: &std::path::Path, target: &UsbDevice) -> bool {
+    target.mounted.iter().any(|m| m != "/" && image.starts_with(m))
+}
+
 /// Validate that a path given to the privileged helper is a plain /dev node name.
 pub fn is_safe_device_path(p: &str) -> bool {
     p.strip_prefix("/dev/").map_or(false, |n| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric()))
@@ -157,6 +173,15 @@ mod tests {
         assert!(!confirmation_matches(&d, "sda"));
         assert!(!confirmation_matches(&d, ""));
         assert!(!confirmation_matches(&d, "sd"));
+    }
+    #[test]
+    fn identity_and_source_drive_guards() {
+        let d = UsbDevice { name: "sdb".into(), path: "/dev/sdb".into(), size: 100, model: String::new(), transport: "usb".into(),
+            mounted: vec!["/media/don/STICK".into()], media: Media::Usb };
+        assert!(identity_problem(Some(100), &d).is_none() && identity_problem(None, &d).is_none());
+        assert!(identity_problem(Some(99), &d).unwrap().contains("changed or replaced"));
+        assert!(image_is_on_target(std::path::Path::new("/media/don/STICK/victorlinux.iso"), &d));
+        assert!(!image_is_on_target(std::path::Path::new("/home/don/victorlinux.iso"), &d));
     }
     #[test]
     fn helper_path_validation() {

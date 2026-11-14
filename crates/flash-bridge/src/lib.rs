@@ -232,8 +232,11 @@ impl<S: System> Bridge<S> {
         // `sha256` is the hash of the file as stored (compressed for .img.xz), as vendors publish it.
         let got = self.sys.sha256_file(&image).map_err(invalid)?;
         if !got.eq_ignore_ascii_case(&want) { return Err((category::VERIFY_FAILED, format!("image sha256 mismatch: expected {want}, got {got}"))) }
-        let readback = self.helper(&["write".into(), image.clone(), dev.path.clone(), want.clone()], progress)?;
-        Ok(json!({ "device": dev.path, "image": image, "image_sha256": want, "bytes": len, "written_sha256": readback, "sha256": readback, "verified": true }))
+        let persistence = p.get("persistence").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut args: Vec<String> = vec!["write".into(), image.clone(), dev.path.clone(), want.clone(), dev.size.to_string()];
+        if persistence { args.push("persist".into()) }
+        let readback = self.helper(&args, progress)?;
+        Ok(json!({ "device": dev.path, "image": image, "image_sha256": want, "bytes": len, "written_sha256": readback, "sha256": readback, "verified": true, "persistence": persistence }))
     }
 
     /// Run the pkexec helper, translating `PROGRESS` lines; returns the `DONE` hash.

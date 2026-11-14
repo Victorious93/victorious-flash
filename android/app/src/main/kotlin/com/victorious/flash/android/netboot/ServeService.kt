@@ -67,7 +67,7 @@ class ServeService : Service() {
         wifi = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager).createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "vflash:serve").apply { acquire() }
         _state.value = State(running = true, urls = addrs.map { it to "http://${it.ip}:${srv.boundPort}$urlPath" },
             efiUrls = if (plan.usable) addrs.map { "http://${it.ip}:${srv.boundPort}${EfiBoot.SHIM}" } else emptyList(),
-            efiProblem = if (plan.usable) "" else "This image has no Ubuntu-style EFI boot files (missing: ${plan.missing.joinToString()}). Use the raw-ISO URL.",
+            efiProblem = if (plan.usable) "" else "This image has no Ubuntu-style EFI boot files (missing: ${plan.missing.joinToString()}). The no-root HTTP/EFI path supports Ubuntu (casper) images only; it is NOT supported for VictorLinux. Boot VictorLinux from a USB drive written by Victorious Flash, or from the phone-as-USB-disk/CD-ROM (root) mode with the same ISO.",
             officialOffered = plan.usable && officialUrl != null, message = "Serving ${f.length() shr 20} MiB read-only.")
     }
 

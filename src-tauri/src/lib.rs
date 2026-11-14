@@ -69,13 +69,42 @@ async fn download_iso(app: AppHandle, id: String) -> Result<DownloadResult, Stri
     Ok(DownloadResult { path: path.to_string_lossy().into(), sha256: actual, verified, gpg })
 }
 
+/// Hash and classify a local image (for example a freshly built VictorLinux ISO). The result says
+/// where trust comes from; the UI must never present an `unverified-local` image as vendor-verified.
 #[tauri::command]
-async fn flash(app: AppHandle, iso: String, device: String, typed_confirmation: String, sha256: String) -> Result<String, String> {
+async fn inspect_local_image(app: AppHandle, path: String, expected_sha256: Option<String>) -> Result<flash_core::local::LocalImage, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut last = 0u64;
+        flash_core::local::inspect(&path, expected_sha256.as_deref(), |d, t| {
+            if d - last > 8 << 20 || d == t { last = d; let _ = app.emit("progress", Progress { phase: "hash".into(), done: d, total: t }); }
+        }).map_err(err)
+    }).await.map_err(err)?
+}
+
+/// What persistence would look like on THIS drive for THIS image (computed, not nominal).
+#[derive(Serialize)]
+struct PersistPlan { start_sector: u64, len_sectors: u64, data_bytes: u64, label: &'static str }
+#[tauri::command]
+fn persistence_plan(iso: String, device_size: u64) -> Result<PersistPlan, String> {
+    use std::io::Read;
+    let p = flash_core::local::resolve(&iso).map_err(err)?;
+    let mut f = std::fs::File::open(&p).map_err(err)?;
+    let len = f.metadata().map_err(err)?.len();
+    let mut mbr = [0u8; 512];
+    f.read_exact(&mut mbr).map_err(|_| "image is too small to be a hybrid ISO".to_string())?;
+    if flash_core::image::XZ_MAGIC == mbr[..6] { return Err("compressed images cannot get a VictorLinux persistence partition".into()) }
+    let l = flash_core::persist::plan(&mbr, len, device_size).map_err(err)?;
+    Ok(PersistPlan { start_sector: l.start_sector, len_sectors: l.len_sectors, data_bytes: l.data_bytes(), label: flash_core::persist::LABEL })
+}
+
+#[tauri::command]
+async fn flash(app: AppHandle, iso: String, device: String, typed_confirmation: String, sha256: String, expected_size: u64, add_persistence: Option<bool>) -> Result<String, String> {
     let devs = list_devices().await?;
     let target = devs.iter().find(|d| d.path == device).ok_or("device is not an eligible removable disk")?;
     if !devices::confirmation_matches(target, &typed_confirmation) { return Err("confirmation text does not match device name".into()) }
+    if let Some(why) = devices::identity_problem(Some(expected_size), target) { return Err(why) }
     let helper = std::env::var("VFLASH_HELPER").unwrap_or_else(|_| "/usr/lib/victorious-flash/victorious-flash-helper".into());
-    let mut child = tokio::process::Command::new("pkexec").arg(helper).args(["write", &iso, &device, &sha256])
+    let mut child = tokio::process::Command::new("pkexec").arg(helper).args(["write", &iso, &device, &sha256, &target.size.to_string()]).args(if add_persistence == Some(true) { vec!["persist"] } else { vec![] })
         .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().map_err(err)?;
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let mut result = String::new();
@@ -93,7 +122,7 @@ async fn flash(app: AppHandle, iso: String, device: String, typed_confirmation: 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![list_distros, list_devices, download_iso, flash, direct_entry])
+        .invoke_handler(tauri::generate_handler![list_distros, list_devices, download_iso, inspect_local_image, persistence_plan, flash, direct_entry])
         .run(tauri::generate_context!())
         .expect("error while running Victorious Flash");
 }

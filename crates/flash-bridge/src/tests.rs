@@ -121,7 +121,7 @@ fn write_params() -> Value { json!({"image":"/home/don/img.iso","device":"/dev/s
     assert!(prog.iter().any(|f| f.progress.as_ref().unwrap().phase == "verify"));
     assert!(fin.ok && fin.progress.is_none());
     assert_eq!(fin.result.as_ref().unwrap()["verified"], true);
-    assert_eq!(b.sys.helper_calls.borrow()[0], vec!["write", "/home/don/img.iso", "/dev/sdb", ABC]);
+    assert_eq!(b.sys.helper_calls.borrow()[0], vec!["write", "/home/don/img.iso", "/dev/sdb", ABC, "31406948352"]);
 }
 
 #[test] fn helper_mismatch_maps_to_verify_failed() {

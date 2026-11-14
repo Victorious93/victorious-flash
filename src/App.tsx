@@ -52,7 +52,7 @@ export default function App() {
             </div>
           </section>
         )}
-        {tab === "distro" && <DistroPicker selected={distro} filter={(d) => mode !== "direct" || DIRECT_IDS.includes(d.id)} onSelect={chooseDistro} onDownloaded={(r, id) => { if (selectedId.current === id) { setIso(r); setTab("target"); } }} />}
+        {tab === "distro" && <DistroPicker onLocal={mode === "direct" ? undefined : (r) => { selectedId.current = `local:${r.path}`; setDistro(null); setProgress(null); setIso(r); setTab("target"); }} selected={distro} filter={(d) => mode !== "direct" || DIRECT_IDS.includes(d.id)} onSelect={chooseDistro} onDownloaded={(r, id) => { if (selectedId.current === id) { setIso(r); setTab("target"); } }} />}
         {tab === "target" && mode === "direct" && <DirectInstall distro={distro} iso={iso} onDone={() => setTab("guide")} />}
         {tab === "target" && mode !== "direct" && <Flasher iso={iso} media={mode} onDone={() => setTab("guide")} />}
         {tab === "guide" && <Guide />}

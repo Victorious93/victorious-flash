@@ -74,7 +74,7 @@ class RemoteConfirmActivity : ComponentActivity() {
                 "I understand and want to expose this image", "EXPOSE IMAGE", onCancel = reject, extra = from) {
                 if (PendingConfirmations.take(id) != null)
                     startForegroundService(Intent(this, GadgetService::class.java).setAction(GadgetService.ACTION_EXPOSE)
-                        .putExtra(GadgetService.EXTRA_PATH, img.file.path).putExtra(GadgetService.EXTRA_CDROM, p.params.optBoolean("cdrom", false)))
+                        .putExtra(GadgetService.EXTRA_PATH, img.file.path).putExtra(GadgetService.EXTRA_CDROM, p.params.optBoolean("cdrom", false)).putExtra(GadgetService.EXTRA_SHA, img.sha))
                 finish()
             }
         }

@@ -10,6 +10,7 @@ class GadgetController(private val shell: RootShell, private val backupDir: Stri
 
     fun expose(caps: Capabilities, file: String, cdrom: Boolean, allowedRoots: List<String>): Outcome {
         if (!caps.gadgetModeUsable) return Outcome.Failed("Gadget mode is not available on this phone.")
+        if (cdrom && caps.cdromSupported == false) return Outcome.Failed("This phone's kernel has no CD-ROM mode. Expose the image as a USB disk instead.")
         val safe = PathSafety.checkString(file, allowedRoots)
         if (safe is PathSafety.Verdict.Refused) return Outcome.Failed("Refused: ${safe.reason}")
         val script = when (caps.backend) {

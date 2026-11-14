@@ -11,6 +11,8 @@ data class Capabilities(
     val massStorageSupported: Boolean,
     val udcs: List<String>,
     val notes: List<String>,
+    /** true/false when the kernel was asked, null when it could not be determined (disk mode may still work). */
+    val cdromSupported: Boolean? = null,
 ) {
     /** P1 (phone as USB disk) can work only if all of these hold. */
     val gadgetModeUsable: Boolean
@@ -35,6 +37,7 @@ class GadgetProbe(private val shell: RootShell) {
             udcLs = shell.run("ls -1 /sys/class/udc 2>/dev/null").stdout,
             legacyLs = shell.run("ls -1 /sys/class/android_usb/android0 2>/dev/null").stdout,
             legacyFunctions = shell.run("cat /sys/class/android_usb/android0/functions 2>/dev/null").stdout,
+            cdromProbe = shell.run(CDROM_PROBE).stdout,
         )
         return parse(rooted = true, raw)
     }
@@ -46,9 +49,21 @@ class GadgetProbe(private val shell: RootShell) {
         val udcLs: String,
         val legacyLs: String,
         val legacyFunctions: String,
+        /** Output of [CDROM_PROBE]: CDROM_OK, CDROM_NO or CDROM_UNKNOWN. */
+        val cdromProbe: String = "",
     )
 
     companion object {
+        /**
+         * Non-destructive: creates and removes an UNLINKED scratch mass_storage function (it is never
+         * bound to a configuration, so the active USB setup is untouched) and checks for lun.0/cdrom.
+         */
+        const val CDROM_PROBE = "G=\$(ls -d /config/usb_gadget/*/ 2>/dev/null | head -n1); " +
+            "if [ -n \"\$G\" ]; then M=\"\${G}functions/mass_storage.vfprobe\"; " +
+            "if mkdir \"\$M\" 2>/dev/null; then if [ -e \"\$M/lun.0/cdrom\" ]; then echo CDROM_OK; else echo CDROM_NO; fi; rmdir \"\$M\" 2>/dev/null; else echo CDROM_UNKNOWN; fi; " +
+            "elif [ -e /sys/class/android_usb/android0/f_mass_storage/lun/cdrom ]; then echo CDROM_OK; " +
+            "elif [ -d /sys/class/android_usb/android0/f_mass_storage ]; then echo CDROM_NO; else echo CDROM_UNKNOWN; fi"
+
         fun parse(rooted: Boolean, raw: RawProbe): Capabilities {
             val notes = mutableListOf<String>()
             val gadgets = raw.configfsLs.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("ls:") }.toList()
@@ -88,7 +103,13 @@ class GadgetProbe(private val shell: RootShell) {
             if (backend != GadgetBackend.NONE && udcs.isEmpty())
                 notes += "No USB Device Controller (UDC) found under /sys/class/udc."
 
-            return Capabilities(rooted, backend, gadgets, massStorageSupported, udcs, notes)
+            val cdrom = when {
+                raw.cdromProbe.contains("CDROM_OK") -> true
+                raw.cdromProbe.contains("CDROM_NO") -> false
+                else -> null
+            }
+            if (backend != GadgetBackend.NONE && cdrom == false) notes += "This kernel's mass_storage has no CD-ROM mode: expose as a USB disk instead."
+            return Capabilities(rooted, backend, gadgets, massStorageSupported, udcs, notes, cdrom)
         }
     }
 }
