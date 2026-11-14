@@ -10,7 +10,7 @@ export default function Flasher({ iso, media, onDone }: { iso: DownloadResult | 
   const [busy, setBusy] = useState(false);
   const refresh = () => api.listDevices().then((ds) => setDevices(ds.filter((d) => d.media === media))).catch((e) => setStatus(String(e)));
   useEffect(() => { refresh(); setDev(null); }, [media]);
-  if (!iso) return <section><h2>Flash {label}</h2><p>Download and verify an image first.</p></section>;
+  if (!iso || !iso.verified) return <section><h2>Flash {label}</h2><p>Download and verify an image first.</p></section>;
   const confirmed = !!dev && (typed.trim() === dev.name || typed.trim() === dev.path);
   const flash = async () => {
     if (!dev) return; setBusy(true); setStatus("Writing… you'll be asked for your password.");

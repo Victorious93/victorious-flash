@@ -11,7 +11,7 @@ Desktop distro installer — pick a Linux distro, download its official ISO, and
 
 > **Package note:** From `android/app/build.gradle.kts`. Desktop-focused product (Android module id retained).
 
-**Status:** CI green (desktop) *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
+**Status:** Desktop frontend build and browser UI regressions verified in this handoff. Rust/Android builds and physical USB/phone boot tests remain unverified; see [VictorLinux integration notes](docs/VICTORLINUX-INTEGRATION.md).
 
 ## Install / build
 
