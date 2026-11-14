@@ -61,7 +61,7 @@ async fn download_iso(app: AppHandle, id: String) -> Result<DownloadResult, Stri
         Some(pinned) => pinned.eq_ignore_ascii_case(&actual),
         None => {
             let sums = client.get(&d.checksum_url).send().await.map_err(err)?.error_for_status().map_err(err)?.text().await.map_err(err)?;
-            checksum::verify(&actual, &sums, &d.iso_filename).map_err(err)?; true
+            checksum::verify_for_catalog(&actual, &sums, &d.iso_filename, &d.iso_url, &d.checksum_url).map_err(err)?; true
         }
     };
     // GPG verification of the checksum file is not implemented yet (MVP stub).

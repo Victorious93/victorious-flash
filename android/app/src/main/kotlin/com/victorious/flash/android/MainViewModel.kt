@@ -105,7 +105,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun fetchChecksum(e: CatalogEntry): String? {
         val c = URL(e.checksumUrl).openConnection() as HttpURLConnection
         c.connectTimeout = 15_000; c.readTimeout = 15_000
-        return c.inputStream.use { ImageVerifier.findSha256(it.bufferedReader().readText().take(1_000_000), e.isoFilename) }
+        return c.inputStream.use {
+            val text = it.bufferedReader().readText().take(1_000_000)
+            ImageVerifier.findSha256(text, e.isoFilename)
+                ?: if (ImageVerifier.isPerFileChecksum(e.isoUrl, e.checksumUrl)) ImageVerifier.singleEntry(text) else null
+        }
     }
 
     /** Copies the picked document into the app's private image folder, hashing as it goes. */

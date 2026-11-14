@@ -20,4 +20,14 @@ class ImageVerifierTest {
         assertNull(ImageVerifier.findSha256("$abc  a.iso", "b.iso"))
         assertFalse(ImageVerifier.isSha256("xyz"))
     }
+
+    @Test fun perFileChecksumNamingADatedSnapshotIsUsableOnlyForItsOwnUrl() {
+        val h = "a".repeat(64)
+        val f = "$h  openSUSE-Tumbleweed-DVD-x86_64-Snapshot20261111-Media.iso\n"
+        assertNull(ImageVerifier.findSha256(f, "openSUSE-Tumbleweed-DVD-x86_64-Current.iso"))
+        assertEquals(h, ImageVerifier.singleEntry(f))
+        assertTrue(ImageVerifier.isPerFileChecksum("https://x/a.iso", "https://x/a.iso.sha256"))
+        assertFalse(ImageVerifier.isPerFileChecksum("https://x/a.iso", "https://x/SHA256SUMS"))
+        assertNull("two entries are ambiguous", ImageVerifier.singleEntry("$h  a.iso\n${"b".repeat(64)}  b.iso\n"))
+    }
 }

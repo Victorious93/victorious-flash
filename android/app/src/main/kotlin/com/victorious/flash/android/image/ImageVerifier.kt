@@ -26,6 +26,17 @@ object ImageVerifier {
         return md.digest().joinToString("") { "%02x".format(it) } to total
     }
 
+    /** Hash in a per-file checksum (`<iso url>.sha256`) that names a different (dated) file; only when it has exactly one entry. */
+    fun singleEntry(contents: String): String? {
+        val hashes = contents.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.mapNotNull { line ->
+            if (line.startsWith("SHA256 (")) line.substringAfter(") = ", "").trim().takeIf { isSha256(it) }
+            else line.split(Regex("\\s+")).firstOrNull()?.takeIf { isSha256(it) }
+        }.toList()
+        return hashes.singleOrNull()?.lowercase()
+    }
+
+    fun isPerFileChecksum(isoUrl: String, checksumUrl: String) = checksumUrl == "$isoUrl.sha256" || checksumUrl == "$isoUrl.sha256sum"
+
     /** GNU (`<hash>  [*]name`) and BSD (`SHA256 (name) = <hash>`) checksum files, as on desktop. */
     fun findSha256(contents: String, filename: String): String? {
         for (raw in contents.lineSequence()) {
