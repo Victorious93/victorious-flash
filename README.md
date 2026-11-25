@@ -1,31 +1,3 @@
-<!-- victorious-fleet-readme-refresh:start -->
-<p align="center">
-  <img src="assets/logo.png" alt="Victorious Flash logo" width="200">
-</p>
-
-# Victorious Flash
-
-Desktop distro installer — pick a Linux distro, download its official ISO, and write it to USB.
-
-**Package id:** `com.victorious.flash.android`
-
-> **Package note:** From `android/app/build.gradle.kts`. Desktop-focused product (Android module id retained).
-
-**Status:** CI green (desktop) *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
-
-## Install / build
-
-See repo root and `android/` for the real build entrypoints (desktop + optional Android module). Prefer documented scripts/CI over invented steps. Unverified locally in this refresh.
-
-_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
-
-## Victorious fleet
-
-- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
-- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
-
-<!-- victorious-fleet-readme-refresh:end -->
-
 <p align="center"><img src="assets/logo-512.png" width="200" alt="Victorious Flash logo"></p>
 <h1 align="center">Victorious Flash</h1>
 <p align="center"><strong>Pick a Linux. Verify it. Flash it. Install it.</strong></p>
@@ -171,6 +143,15 @@ Entries accept an optional `kind` (`linux-iso` by default, `rootforge-os`, or `r
 4. The device read-back must match that decompressed hash.
 
 The bridge applies the same rules for `flash.image.write`. Its result reports `image_sha256` (compressed) and `written_sha256` (decompressed). Use those two for `flash.readback.verify` later. Any entry can be written in USB or SD mode. Direct install is offered only for ISOs with a known loopback recipe. No RootForge OS entry ships yet, because `Victorious93/rootforge-os` has no published release with an image and checksum. Its `release.yml` is meant to produce one: it attaches the ISO with SHA-256 sums to a draft release, which a maintainer then publishes.
+
+## Victorious fleet
+
+Victorious Flash is part of the [Victorious Framework](https://victorious-framework.pages.dev), a family of Android and PC tools by Don Victor. **It works standalone; fleet integrations are optional.** Related: [droidcommand-AI](https://github.com/Victorious93/droidcommand-AI) (fleet controller), [VictorLinux](https://github.com/Victorious93/VictorLinux), [VictorRecovery](https://github.com/Victorious93/VictorRecovery). The roster is in [victorious-fleet](https://github.com/Victorious93/victorious-fleet) and live status is in [fleet-manifest](https://github.com/Victorious93/fleet-manifest).
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes focused, match the existing code style, never commit secrets or release keys, and keep fleet integrations optional. Open a PR against the default branch and wait for CI to pass.
+
 
 ## License
 
